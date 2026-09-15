@@ -4,6 +4,7 @@ import { helmetMiddleware, corsMiddleware, compressionMiddleware, apiLimiter, re
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { healthCheck, apiInfo } from './routes/health.js';
 import authRoutes from './routes/auth.js';
+import userRoutes from './routes/users.js';
 import { checkAuthSchema } from './middleware/auth.js';
 
 /**
@@ -36,8 +37,10 @@ export function createApp(): Express {
   // Authentication routes
   app.use('/api/auth', authRoutes);
 
+  // User profile routes
+  app.use('/api/users', userRoutes);
+
   // API routes will be added here in subsequent steps
-  // app.use('/api/users', userRoutes);
   // app.use('/api/buddies', buddyRoutes);
   // app.use('/api/bookings', bookingRoutes);
   // app.use('/api/payments', paymentRoutes);
