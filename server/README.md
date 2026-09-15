@@ -28,7 +28,12 @@ Production-ready API server for the YorBuddy companionship platform.
    - Copy contents of `src/db/schema.sql`
    - Run the query
 
-4. Start development server:
+4. Apply authentication migration:
+   - Go to Supabase Dashboard > SQL Editor
+   - Copy contents of `src/db/migrations/001_add_auth_password.sql`
+   - Run the query
+
+5. Start development server:
    ```bash
    npm run dev
    ```
@@ -39,15 +44,21 @@ Production-ready API server for the YorBuddy companionship platform.
 - `GET /api/health` — Server health check
 - `GET /api` — API info
 
+### Authentication
+- `POST /api/auth/register` — Create new account (email/password)
+- `POST /api/auth/login` — Authenticate with email/password
+- `POST /api/auth/refresh` — Refresh access token
+- `POST /api/auth/logout` — End session and revoke refresh token
+- `GET /api/auth/me` — Get current authenticated user profile
+
 ### Coming in subsequent steps
-- `POST /api/auth/otp/send` — Send OTP
-- `POST /api/auth/otp/verify` — Verify OTP
+- `POST /api/auth/otp/send` — Send SMS OTP
+- `POST /api/auth/otp/verify` — Verify SMS OTP
 - `POST /api/users/me` — Update profile
 - `GET /api/buddies/search` — Search buddies
 - `POST /api/bookings` — Create booking
 - `POST /api/payments/order` — Create payment order
 - `WS /chat` — Real-time chat
-- ...and more
 
 ## Scripts
 
@@ -69,13 +80,23 @@ server/
 │   │   └── validation.ts   — Zod validation helpers
 │   ├── middleware/
 │   │   ├── errorHandler.ts — Centralized error handling
+│   │   ├── auth.ts         — JWT authentication middleware
 │   │   └── security.ts     — Helmet, CORS, rate limiting
 │   ├── routes/
-│   │   └── health.ts       — Health check endpoint
+│   │   ├── health.ts       — Health check endpoint
+│   │   └── auth.ts         — Authentication routes
+│   ├── services/
+│   │   └── authService.ts  — Authentication business logic
 │   ├── utils/
-│   │   └── apiResponse.ts  — Standardized API responses
+│   │   ├── apiResponse.ts  — Standardized API responses
+│   │   ├── password.ts     — Password hashing (scrypt)
+│   │   └── jwt.ts          — JWT token generation/verification
+│   ├── types/
+│   │   ├── auth.ts         — Auth-related types
+│   │   └── express.d.ts    — Express type augmentation
 │   └── db/
-│       └── schema.sql      — Database schema
+│       ├── schema.sql      — Database schema
+│       └── migrations/     — Database migrations
 ├── package.json
 ├── tsconfig.json
 ├── .env.example
@@ -91,4 +112,5 @@ server/
 - **Cache:** Upstash Redis
 - **Validation:** Zod 3.24
 - **Security:** Helmet, CORS, express-rate-limit
+- **Auth:** JWT (access + refresh tokens), scrypt password hashing
 - **Dev tooling:** tsx (TypeScript execution)

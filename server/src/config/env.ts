@@ -10,6 +10,8 @@ interface EnvConfig {
   SUPABASE_SERVICE_KEY: string;
   JWT_ACCESS_SECRET: string;
   JWT_REFRESH_SECRET: string;
+  JWT_ACCESS_TTL: string;
+  JWT_REFRESH_TTL: string;
   RAZORPAY_KEY_ID: string;
   RAZORPAY_KEY_SECRET: string;
   RAZORPAY_WEBHOOK_SECRET: string;
@@ -51,6 +53,8 @@ function loadEnv(): EnvConfig {
     SUPABASE_SERVICE_KEY: process.env.SUPABASE_SERVICE_KEY || '',
     JWT_ACCESS_SECRET: process.env.JWT_ACCESS_SECRET || 'dev-access-secret-change-me',
     JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET || 'dev-refresh-secret-change-me',
+    JWT_ACCESS_TTL: process.env.JWT_ACCESS_TTL || '15m',
+    JWT_REFRESH_TTL: process.env.JWT_REFRESH_TTL || '7d',
     RAZORPAY_KEY_ID: process.env.RAZORPAY_KEY_ID || '',
     RAZORPAY_KEY_SECRET: process.env.RAZORPAY_KEY_SECRET || '',
     RAZORPAY_WEBHOOK_SECRET: process.env.RAZORPAY_WEBHOOK_SECRET || '',

@@ -3,6 +3,8 @@ import { env } from './config/env.js';
 import { helmetMiddleware, corsMiddleware, compressionMiddleware, apiLimiter, requestLogger } from './middleware/security.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { healthCheck, apiInfo } from './routes/health.js';
+import authRoutes from './routes/auth.js';
+import { checkAuthSchema } from './middleware/auth.js';
 
 /**
  * Create and configure the Express application.
@@ -31,8 +33,10 @@ export function createApp(): Express {
   app.get('/api/health', healthCheck);
   app.get('/api', apiInfo);
 
+  // Authentication routes
+  app.use('/api/auth', authRoutes);
+
   // API routes will be added here in subsequent steps
-  // app.use('/api/auth', authRoutes);
   // app.use('/api/users', userRoutes);
   // app.use('/api/buddies', buddyRoutes);
   // app.use('/api/bookings', bookingRoutes);
@@ -57,6 +61,9 @@ export function createApp(): Express {
  */
 export function startServer(): ReturnType<Express['listen']> {
   const app = createApp();
+
+  // Check auth schema on startup
+  checkAuthSchema();
 
   const server = app.listen(env.PORT, () => {
     console.log('');

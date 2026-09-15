@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { ZodError } from 'zod';
 import { env } from '../config/env.js';
 
 /**
@@ -62,12 +63,21 @@ export function errorHandler(err: Error, req: Request, res: Response, _next: Nex
   let statusCode = 500;
   let message = 'Internal Server Error';
   let code = 'INTERNAL_ERROR';
-  const details: unknown = undefined;
+  let details: unknown = undefined;
 
   if (err instanceof AppError) {
     statusCode = err.statusCode;
     message = err.message;
     code = err.code;
+  } else if (err instanceof ZodError) {
+    // Zod validation error
+    statusCode = 400;
+    message = 'Request validation failed';
+    code = 'VALIDATION_ERROR';
+    details = err.errors.map((e) => ({
+      field: e.path.join('.'),
+      message: e.message,
+    }));
   } else if (err.name === 'SyntaxError' && 'body' in err) {
     // JSON parse error
     statusCode = 400;

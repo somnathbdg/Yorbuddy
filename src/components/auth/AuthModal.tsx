@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   CheckCircle2,
@@ -17,6 +17,7 @@ import {
   Smartphone,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { authService } from '../../services/auth';
 
 export const AuthModal: React.FC = () => {
   const {
@@ -37,34 +38,57 @@ export const AuthModal: React.FC = () => {
   const [authMode, setAuthMode] = useState<'register' | 'login'>('register');
 
   // Step 1 Form Data
-  const [fullName, setFullName] = useState(currentUser.full_name || 'Somnath Banerjee');
-  const [email, setEmail] = useState(currentUser.email || 'somnathbdg@gmail.com');
-  const [mobile, setMobile] = useState('+91 98765 43210');
-  const [password, setPassword] = useState('SecurePass2026!');
-  const [dob, setDob] = useState('1998-05-14');
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [mobile, setMobile] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [dob, setDob] = useState('');
   const [gender, setGender] = useState<'male' | 'female' | 'non-binary' | 'prefer-not-to-say'>('male');
-  const [city, setCity] = useState('Pune');
+  const [city, setCity] = useState('');
 
   // Step 2 Form Data
-  const [bio, setBio] = useState('Tech professional who loves coffee, cinema, and weekend walks.');
-  const [interests, setInterests] = useState<string[]>(['Coffee', 'Movies', 'City Walks', 'Bookstores']);
+  const [bio, setBio] = useState('');
+  const [interests, setInterests] = useState<string[]>([]);
   const [interestInput, setInterestInput] = useState('');
-  const [languages, setLanguages] = useState<string[]>(['English', 'Hindi', 'Bengali']);
-  const [selectedActivities, setSelectedActivities] = useState<string[]>(['act-1', 'act-2', 'act-5']);
+  const [languages, setLanguages] = useState<string[]>(['English', 'Hindi']);
+  const [selectedActivities, setSelectedActivities] = useState<string[]>([]);
 
   // Step 3 Verification
-  const [otp, setOtp] = useState('7492');
-  const [isOtpVerified, setIsOtpVerified] = useState(true);
+  const [otp, setOtp] = useState('');
+  const [isOtpVerified, setIsOtpVerified] = useState(false);
   const [idType, setIdType] = useState<'aadhaar' | 'pan' | 'passport' | 'voter_id'>('aadhaar');
-  const [idNumber, setIdNumber] = useState('XXXX-XXXX-4812');
-  const [isIdUploaded, setIsIdUploaded] = useState(true);
+  const [idNumber, setIdNumber] = useState('');
+  const [isIdUploaded, setIsIdUploaded] = useState(false);
 
   // Step 4 Payment
   const [paymentMethod, setPaymentMethod] = useState<'upi' | 'credit_card' | 'debit_card' | 'net_banking'>('upi');
-  const [upiId, setUpiId] = useState('somnath@okhdfcbank');
+  const [upiId, setUpiId] = useState('');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [isPaymentComplete, setIsPaymentComplete] = useState(false);
   const [errorText, setErrorText] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Listen for auth expired events
+  useEffect(() => {
+    const handleAuthExpired = () => {
+      setIsRegisterModalOpen(true);
+      setAuthMode('login');
+      setErrorText('Session expired. Please login again.');
+    };
+    window.addEventListener('yorbuddy:auth-expired', handleAuthExpired);
+    return () => window.removeEventListener('yorbuddy:auth-expired', handleAuthExpired);
+  }, [setIsRegisterModalOpen]);
+
+  // Reset form when modal opens
+  useEffect(() => {
+    if (isRegisterModalOpen) {
+      setErrorText('');
+      if (authMode === 'login' && currentUser?.email) {
+        setEmail(currentUser.email);
+      }
+    }
+  }, [isRegisterModalOpen, authMode, currentUser]);
 
   if (!isRegisterModalOpen) return null;
 
@@ -80,18 +104,72 @@ export const AuthModal: React.FC = () => {
     return age >= 18;
   };
 
-  const handleStep1Submit = (e: React.FormEvent) => {
+  const handleStep1Submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorText('');
+
     if (!validateAge(dob)) {
       setErrorText('You must be 18 years or older to join YorBuddy.');
       return;
     }
+
+    if (password.length < 8) {
+      setErrorText('Password must be at least 8 characters.');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setErrorText('Passwords do not match.');
+      return;
+    }
+
     setErrorText('');
-    setRegisterStep(2);
+    setIsLoading(true);
+
+    try {
+      const result = await authService.register({
+        email,
+        password,
+        full_name: fullName,
+        phone: mobile || undefined,
+        dob,
+        gender,
+        city,
+      });
+
+      setCurrentUser({
+        ...currentUser,
+        id: result.user.id,
+        email: result.user.email,
+        full_name: result.user.full_name,
+        phone: result.user.phone || '',
+        role: result.user.role,
+        is_active: result.user.is_active,
+        is_membership_paid: result.user.is_membership_paid,
+        created_at: result.user.created_at,
+        updated_at: new Date().toISOString(),
+        dob,
+        gender,
+      });
+
+      setRegisterStep(2);
+    } catch (err: any) {
+      const apiError = err.response?.data?.error;
+      setErrorText(apiError?.message || 'Registration failed. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleStep2Submit = (e: React.FormEvent) => {
     e.preventDefault();
+    setUserProfile({
+      ...userProfile,
+      bio,
+      interests,
+      languages,
+      city,
+    });
     setRegisterStep(3);
   };
 
@@ -111,10 +189,37 @@ export const AuthModal: React.FC = () => {
     }, 1000);
   };
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsRegisterModalOpen(false);
-    setActiveTab('user-dashboard');
+    setErrorText('');
+    setIsLoading(true);
+
+    try {
+      const result = await authService.login({ email, password });
+
+      setCurrentUser({
+        ...currentUser,
+        id: result.user.id,
+        email: result.user.email,
+        full_name: result.user.full_name,
+        phone: result.user.phone || '',
+        role: result.user.role,
+        is_active: result.user.is_active,
+        is_membership_paid: result.user.is_membership_paid,
+        created_at: result.user.created_at,
+        updated_at: new Date().toISOString(),
+        dob: result.user.dob || '',
+        gender: result.user.gender || 'prefer-not-to-say',
+      });
+
+      setIsRegisterModalOpen(false);
+      setActiveTab('user-dashboard');
+    } catch (err: any) {
+      const apiError = err.response?.data?.error;
+      setErrorText(apiError?.message || 'Login failed. Please check your credentials.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const addInterest = () => {
@@ -208,6 +313,7 @@ export const AuthModal: React.FC = () => {
                     onChange={(e) => setEmail(e.target.value)}
                     className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                     required
+                    autoComplete="email"
                   />
                 </div>
               </div>
@@ -224,6 +330,7 @@ export const AuthModal: React.FC = () => {
                     onChange={(e) => setPassword(e.target.value)}
                     className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                     required
+                    autoComplete="current-password"
                   />
                 </div>
               </div>
@@ -238,11 +345,25 @@ export const AuthModal: React.FC = () => {
                 </a>
               </div>
 
+              {errorText && (
+                <p className="text-xs font-bold text-rose-600 bg-rose-50 p-2 rounded-lg border border-rose-200">
+                  {errorText}
+                </p>
+              )}
+
               <button
                 type="submit"
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-600 to-pink-500 text-white font-bold text-xs shadow-md shadow-blue-500/20"
+                disabled={isLoading}
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-600 to-pink-500 text-white font-bold text-xs shadow-md shadow-blue-500/20 disabled:opacity-50 flex items-center justify-center space-x-2"
               >
-                Login to YorBuddy
+                {isLoading ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                    <span>Logging in...</span>
+                  </>
+                ) : (
+                  'Login to YorBuddy'
+                )}
               </button>
 
               <div className="text-center pt-2">
@@ -252,6 +373,7 @@ export const AuthModal: React.FC = () => {
                   onClick={() => {
                     setAuthMode('register');
                     setRegisterStep(1);
+                    setErrorText('');
                   }}
                   className="text-xs font-bold text-pink-600 hover:underline"
                 >
@@ -260,7 +382,7 @@ export const AuthModal: React.FC = () => {
               </div>
             </form>
           ) : isPaymentComplete ? (
-            /* PAYMENT SUCCESS STATE (Section 7) */
+            /* PAYMENT SUCCESS STATE */
             <div className="text-center py-6 space-y-4">
               <div className="w-16 h-16 rounded-full bg-pink-100 text-pink-600 flex items-center justify-center mx-auto text-3xl ring-8 ring-pink-50">
                 🎉
@@ -269,7 +391,7 @@ export const AuthModal: React.FC = () => {
                 Welcome to YorBuddy!
               </h2>
               <p className="text-sm font-semibold text-slate-600 max-w-sm mx-auto">
-                “Your account is now active. Start discovering your buddies.”
+                "Your account is now active. Start discovering your buddies."
               </p>
 
               <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200 text-left max-w-sm mx-auto space-y-2 text-xs">
@@ -330,6 +452,7 @@ export const AuthModal: React.FC = () => {
                           placeholder="you@example.com"
                           className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-800"
                           required
+                          autoComplete="email"
                         />
                       </div>
                     </div>
@@ -346,7 +469,6 @@ export const AuthModal: React.FC = () => {
                           onChange={(e) => setMobile(e.target.value)}
                           placeholder="+91 98765 43210"
                           className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-800"
-                          required
                         />
                       </div>
                     </div>
@@ -354,7 +476,7 @@ export const AuthModal: React.FC = () => {
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                      Password
+                      Password (min 8 characters)
                     </label>
                     <div className="relative">
                       <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -364,6 +486,26 @@ export const AuthModal: React.FC = () => {
                         onChange={(e) => setPassword(e.target.value)}
                         className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-800"
                         required
+                        minLength={8}
+                        autoComplete="new-password"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                      Confirm Password
+                    </label>
+                    <div className="relative">
+                      <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-800"
+                        required
+                        minLength={8}
+                        autoComplete="new-password"
                       />
                     </div>
                   </div>
@@ -403,18 +545,13 @@ export const AuthModal: React.FC = () => {
                       <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                         City
                       </label>
-                      <select
+                      <input
+                        type="text"
                         value={city}
                         onChange={(e) => setCity(e.target.value)}
+                        placeholder="e.g. Pune"
                         className="w-full p-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-800"
-                      >
-                        <option value="Pune">Pune</option>
-                        <option value="Bengaluru">Bengaluru</option>
-                        <option value="Mumbai">Mumbai</option>
-                        <option value="Delhi NCR">Delhi NCR</option>
-                        <option value="Hyderabad">Hyderabad</option>
-                        <option value="Kolkata">Kolkata</option>
-                      </select>
+                      />
                     </div>
                   </div>
 
@@ -427,17 +564,30 @@ export const AuthModal: React.FC = () => {
                   <div className="pt-2">
                     <button
                       type="submit"
-                      className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-600 to-pink-500 text-white font-bold text-xs shadow-md shadow-blue-500/20 hover:opacity-95 transition-opacity flex items-center justify-center space-x-1"
+                      disabled={isLoading}
+                      className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-600 to-pink-500 text-white font-bold text-xs shadow-md shadow-blue-500/20 hover:opacity-95 transition-opacity flex items-center justify-center space-x-1 disabled:opacity-50"
                     >
-                      <span>Continue to Profile (Step 2)</span>
-                      <ArrowRight className="w-4 h-4" />
+                      {isLoading ? (
+                        <>
+                          <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                          <span>Creating account...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>Create Account & Continue</span>
+                          <ArrowRight className="w-4 h-4" />
+                        </>
+                      )}
                     </button>
                   </div>
 
                   <div className="text-center pt-2">
                     <button
                       type="button"
-                      onClick={() => setAuthMode('login')}
+                      onClick={() => {
+                        setAuthMode('login');
+                        setErrorText('');
+                      }}
                       className="text-xs text-slate-500 hover:text-blue-600"
                     >
                       Already have an account? <strong>Login</strong>
@@ -476,7 +626,6 @@ export const AuthModal: React.FC = () => {
                       onChange={(e) => setBio(e.target.value)}
                       placeholder="Share a short introduction about yourself and what you enjoy..."
                       className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 resize-none"
-                      required
                     />
                   </div>
 
@@ -583,25 +732,13 @@ export const AuthModal: React.FC = () => {
                         <Smartphone className="w-4 h-4 text-blue-600" />
                         <span>Mobile OTP Verification</span>
                       </div>
-                      <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[10px] font-bold">
-                        ✓ OTP Verified
+                      <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 text-[10px] font-bold">
+                        Pending
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-500">
-                      Code sent to {mobile}. (Auto-verified for instant onboarding)
+                      Phone OTP will be available after MSG91 integration.
                     </p>
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="text"
-                        value={otp}
-                        onChange={(e) => setOtp(e.target.value)}
-                        className="w-28 p-2 rounded-lg bg-white border border-slate-300 font-mono text-center font-bold text-sm tracking-widest"
-                      />
-                      <span className="text-xs text-emerald-600 font-semibold flex items-center">
-                        <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-                        Verified
-                      </span>
-                    </div>
                   </div>
 
                   {/* Email Verification */}
@@ -626,12 +763,12 @@ export const AuthModal: React.FC = () => {
                         <FileCheck className="w-4 h-4 text-pink-600" />
                         <span>Government Identity Verification</span>
                       </div>
-                      <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 text-[10px] font-bold">
-                        Required
+                      <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 text-[10px] font-bold">
+                        Optional
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-500">
-                      We verify all users to maintain a strictly safe, platonic, non-escort community.
+                      ID verification can be completed later. You can browse buddies now.
                     </p>
 
                     <div className="grid grid-cols-2 gap-2 pt-1">
@@ -654,12 +791,6 @@ export const AuthModal: React.FC = () => {
                         className="p-2 rounded-lg bg-white border border-slate-300 text-xs font-mono"
                       />
                     </div>
-
-                    <div className="p-3 rounded-xl border border-dashed border-slate-300 bg-white text-center text-xs text-slate-500 flex items-center justify-center space-x-2">
-                      <UploadCloud className="w-4 h-4 text-blue-600" />
-                      <span className="font-semibold text-slate-700">Aadhaar_Front_Verified.pdf</span>
-                      <span className="text-[10px] text-emerald-600 font-bold">(Uploaded)</span>
-                    </div>
                   </div>
 
                   <div className="pt-2 flex items-center space-x-2">
@@ -681,7 +812,7 @@ export const AuthModal: React.FC = () => {
                 </form>
               )}
 
-              {/* STEP 4: Membership Payment Page (Section 6 & 7 & 23) */}
+              {/* STEP 4: Membership Payment Page */}
               {registerStep === 4 && (
                 <form onSubmit={handlePaymentSubmit} className="space-y-4">
                   {/* Order summary */}
@@ -698,7 +829,6 @@ export const AuthModal: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Explicit business rule clarity: ONE-TIME, NOT monthly */}
                     <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-900 font-semibold">
                       ⚡ Important: This ₹499 fee is a <strong>ONE-TIME REGISTRATION FEE</strong>. It is NOT monthly, weekly, or recurring.
                     </div>

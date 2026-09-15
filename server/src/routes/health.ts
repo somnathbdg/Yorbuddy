@@ -31,6 +31,20 @@ export async function healthCheck(_req: Request, res: Response): Promise<void> {
     health.status = 'degraded';
   }
 
+  // Check auth schema
+  try {
+    const supabase = getSupabase();
+    const { error } = await supabase.from('users').select('password_hash').limit(0);
+    if (error && error.message.includes('password_hash')) {
+      health.auth_schema = 'migration_required';
+      health.auth_migration = 'Run server/src/db/migrations/001_add_auth_password.sql in Supabase SQL Editor';
+    } else {
+      health.auth_schema = 'ready';
+    }
+  } catch (err) {
+    health.auth_schema = 'unknown';
+  }
+
   const statusCode = health.status === 'ok' ? 200 : 503;
   successResponse(res, health, statusCode);
 }
