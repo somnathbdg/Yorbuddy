@@ -5,6 +5,7 @@ import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { healthCheck, apiInfo } from './routes/health.js';
 import authRoutes from './routes/auth.js';
 import userRoutes from './routes/users.js';
+import buddyRoutes from './routes/buddies.js';
 import { checkAuthSchema } from './middleware/auth.js';
 
 /**
@@ -40,8 +41,10 @@ export function createApp(): Express {
   // User profile routes
   app.use('/api/users', userRoutes);
 
+  // Buddy discovery routes
+  app.use('/api/buddies', buddyRoutes);
+
   // API routes will be added here in subsequent steps
-  // app.use('/api/buddies', buddyRoutes);
   // app.use('/api/bookings', bookingRoutes);
   // app.use('/api/payments', paymentRoutes);
   // app.use('/api/chat', chatRoutes);

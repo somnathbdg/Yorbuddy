@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   Search,
   Filter,
@@ -9,13 +9,15 @@ import {
   CheckCircle2,
   X,
   ChevronDown,
+  Loader2,
+  AlertCircle,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { BuddyCard } from './BuddyCard';
+import { buddyService, BuddySearchResult } from '../../services/buddy';
 
 export const BuddySearch: React.FC = () => {
   const {
-    buddies,
     activities,
     selectedCity,
     setSelectedCity,
@@ -35,21 +37,124 @@ export const BuddySearch: React.FC = () => {
   const [selectedAvailability, setSelectedAvailability] = useState<string>('any');
   const [showMobileFilterModal, setShowMobileFilterModal] = useState<boolean>(false);
 
+  // API state
+  const [apiBuddies, setApiBuddies] = useState<BuddySearchResult[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [totalCount, setTotalCount] = useState<number>(0);
+
+  // Fetch buddies from API
+  const fetchBuddies = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const params: Record<string, any> = {
+        page: 1,
+        per_page: 50,
+        sort: 'rating_desc',
+      };
+      if (selectedCity !== 'All') params.city = selectedCity;
+      if (selectedActivitySlug) params.activity = selectedActivitySlug;
+      if (selectedLanguage !== 'any') params.language = selectedLanguage;
+      if (minRating > 0) params.min_rating = minRating;
+      if (maxRate < 1000) params.max_rate = maxRate;
+      if (onlyOnline) params.online = true;
+      if (searchQuery.trim()) params.query = searchQuery.trim();
+
+      const response = await buddyService.searchBuddies(params);
+      setApiBuddies(response.data);
+      setTotalCount(response.meta.total);
+    } catch (err: any) {
+      const apiError = err.response?.data?.error;
+      setError(apiError?.message || 'Failed to load buddies. Please try again.');
+      setApiBuddies([]);
+      setTotalCount(0);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [selectedCity, selectedActivitySlug, selectedLanguage, minRating, maxRate, onlyOnline, searchQuery]);
+
+  // Fetch on filter change
+  useEffect(() => {
+    fetchBuddies();
+  }, [fetchBuddies]);
+
+  // Transform API results to FullBuddyData format for BuddyCard compatibility
+  const buddies = useMemo(() => {
+    return apiBuddies.map((b) => ({
+      user: {
+        id: b.user.id,
+        email: '',
+        password_hash: '',
+        mobile: '',
+        full_name: b.user.full_name,
+        dob: '',
+        gender: b.user.gender,
+        role: 'user' as const,
+        is_active: true,
+        is_membership_paid: false,
+        created_at: '',
+        updated_at: '',
+      },
+      profile: {
+        id: '',
+        user_id: b.user.id,
+        bio: '',
+        photo_url: b.profile.photo_url,
+        city: b.profile.city,
+        area: b.profile.area,
+        languages: b.profile.languages,
+        interests: b.profile.interests,
+        is_phone_verified: true,
+        is_email_verified: true,
+        is_id_verified: true,
+        created_at: '',
+      },
+      buddyProfile: {
+        id: b.buddy_profile.id,
+        user_id: b.user.id,
+        hourly_rate: b.buddy_profile.hourly_rate,
+        headline: b.buddy_profile.headline,
+        bio: b.buddy_profile.bio,
+        rating: b.buddy_profile.rating,
+        review_count: b.buddy_profile.review_count,
+        is_verified: b.buddy_profile.is_verified,
+        verification_status: 'approved' as const,
+        total_earnings: 0,
+        profile_views: 0,
+        is_online: b.buddy_profile.is_online,
+        response_time: b.buddy_profile.response_time,
+        badge_text: b.buddy_profile.badge_text,
+        supported_activity_ids: b.buddy_profile.supported_activity_ids,
+        safety_pledge_signed: b.buddy_profile.safety_pledge_signed,
+        created_at: '',
+      },
+    }));
+  }, [apiBuddies]);
+
+  // Client-side gender filter (API doesn't support it)
+  const filteredBuddies = useMemo(() => {
+    if (selectedGender === 'any') return buddies;
+    return buddies.filter((b) => b.user.gender === selectedGender);
+  }, [buddies, selectedGender]);
+
+  // Extract unique cities from current results for city pills
   const cities = useMemo(() => {
     const citySet = new Set<string>();
-    buddies.forEach((b) => {
+    apiBuddies.forEach((b) => {
       if (b.profile.city) citySet.add(b.profile.city);
     });
     return ['All', ...Array.from(citySet).sort()];
-  }, [buddies]);
+  }, [apiBuddies]);
 
+  // Extract unique languages from current results
   const languages = useMemo(() => {
     const langSet = new Set<string>();
-    buddies.forEach((b) => {
+    apiBuddies.forEach((b) => {
       b.profile.languages?.forEach((l) => langSet.add(l));
     });
     return ['any', ...Array.from(langSet).sort()];
-  }, [buddies]);
+  }, [apiBuddies]);
 
   // Reset filters
   const handleResetFilters = () => {
@@ -65,78 +170,6 @@ export const BuddySearch: React.FC = () => {
     setOnlyOnline(false);
     setSelectedAvailability('any');
   };
-
-  // Filtered buddies
-  const filteredBuddies = useMemo(() => {
-    return buddies.filter((b) => {
-      // City filter
-      if (selectedCity !== 'All' && b.profile.city.toLowerCase() !== selectedCity.toLowerCase()) {
-        return false;
-      }
-
-      // Activity filter
-      if (selectedActivitySlug) {
-        const actObj = activities.find((a) => a.slug === selectedActivitySlug);
-        if (actObj && !b.buddyProfile.supported_activity_ids.includes(actObj.id)) {
-          return false;
-        }
-      }
-
-      // Search text query
-      if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase();
-        const matchesName = b.user.full_name.toLowerCase().includes(query);
-        const matchesCity = b.profile.city.toLowerCase().includes(query);
-        const matchesArea = b.profile.area.toLowerCase().includes(query);
-        const matchesBio = b.buddyProfile.bio.toLowerCase().includes(query);
-        const matchesInterests = b.profile.interests.some((i) => i.toLowerCase().includes(query));
-        if (!matchesName && !matchesCity && !matchesArea && !matchesBio && !matchesInterests) {
-          return false;
-        }
-      }
-
-      // Gender
-      if (selectedGender !== 'any' && b.user.gender !== selectedGender) {
-        return false;
-      }
-
-      // Language
-      if (selectedLanguage !== 'any') {
-        const hasLang = b.profile.languages.some(
-          (l) => l.toLowerCase() === selectedLanguage.toLowerCase()
-        );
-        if (!hasLang) return false;
-      }
-
-      // Max Rate
-      if (b.buddyProfile.hourly_rate > maxRate) {
-        return false;
-      }
-
-      // Min Rating
-      if (minRating > 0 && b.buddyProfile.rating < minRating) {
-        return false;
-      }
-
-      // Online status
-      if (onlyOnline && !b.buddyProfile.is_online) {
-        return false;
-      }
-
-      return true;
-    });
-  }, [
-    buddies,
-    selectedCity,
-    selectedActivitySlug,
-    searchQuery,
-    selectedGender,
-    selectedLanguage,
-    maxRate,
-    minRating,
-    onlyOnline,
-    activities,
-  ]);
 
   return (
     <div className="bg-slate-50 min-h-screen py-8">
@@ -155,7 +188,7 @@ export const BuddySearch: React.FC = () => {
 
             <div className="flex items-center space-x-2">
               <span className="text-xs font-bold text-slate-500">
-                {filteredBuddies.length} buddies available
+                {totalCount} buddies available
               </span>
               <button
                 onClick={handleResetFilters}
@@ -327,8 +360,31 @@ export const BuddySearch: React.FC = () => {
           </div>
         </div>
 
-        {/* Results Grid */}
-        {filteredBuddies.length === 0 ? (
+        {/* Loading State */}
+        {isLoading && (
+          <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 max-w-lg mx-auto">
+            <Loader2 className="w-10 h-10 text-blue-600 mx-auto mb-4 animate-spin" />
+            <p className="text-sm font-bold text-slate-700">Loading buddies...</p>
+          </div>
+        )}
+
+        {/* Error State */}
+        {!isLoading && error && (
+          <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 max-w-lg mx-auto">
+            <AlertCircle className="w-10 h-10 text-rose-500 mx-auto mb-4" />
+            <h3 className="text-lg font-bold text-slate-900">Error loading buddies</h3>
+            <p className="text-xs text-slate-500 mt-1">{error}</p>
+            <button
+              onClick={fetchBuddies}
+              className="mt-4 px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold shadow-md"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {/* Empty State */}
+        {!isLoading && !error && filteredBuddies.length === 0 && (
           <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 max-w-lg mx-auto">
             <div className="w-16 h-16 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-4">
               <Search className="w-8 h-8" />
@@ -344,7 +400,10 @@ export const BuddySearch: React.FC = () => {
               Reset Filters
             </button>
           </div>
-        ) : (
+        )}
+
+        {/* Results Grid */}
+        {!isLoading && !error && filteredBuddies.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {filteredBuddies.map((buddy) => (
               <BuddyCard key={buddy.user.id} buddy={buddy} />
