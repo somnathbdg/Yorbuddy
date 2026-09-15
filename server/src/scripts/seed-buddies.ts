@@ -25,15 +25,6 @@ async function loadActivityMap(supabase: any) {
   console.log('[SEED] Activity ID map:', ACTIVITY_ID_MAP);
 }
 
-// Generate a proper UUID v4
-function generateUUID(): string {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0;
-    const v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
-}
-
 // Inline buddy seed data (20 buddies from Yorbuddy dataset)
 const BUDDY_SEED_DATA = [
   { origId: 'usr-b9', name: 'Aarav Malhotra', gender: 'male', dob: '1998-06-12', city: 'Pune', area: 'Koregaon Park & Kalyani Nagar', rate: 650, rating: 4.93, reviews: 84, online: true, photo: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=600&q=80', headline: 'Specialty coffee aficionado & weekend live gig companion.', bio: 'Avid specialty coffee lover and music enthusiast.', languages: ['English', 'Hindi', 'Punjabi'], interests: ['Pour Over Coffee', 'Acoustic Gigs', 'Vinyl Records', 'Bookstores', 'Urban Cycling'], activities: ['act-1', 'act-2', 'act-5', 'act-7'], badge: 'Coffee Connoisseur', responseTime: 'Usually responds in 10 mins' },

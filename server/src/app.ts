@@ -6,6 +6,7 @@ import { healthCheck, apiInfo } from './routes/health.js';
 import authRoutes from './routes/auth.js';
 import userRoutes from './routes/users.js';
 import buddyRoutes from './routes/buddies.js';
+import bookingRoutes from './routes/bookings.js';
 import { checkAuthSchema } from './middleware/auth.js';
 
 /**
@@ -43,6 +44,9 @@ export function createApp(): Express {
 
   // Buddy discovery routes
   app.use('/api/buddies', buddyRoutes);
+
+  // Booking routes
+  app.use('/api/bookings', bookingRoutes);
 
   // API routes will be added here in subsequent steps
   // app.use('/api/bookings', bookingRoutes);

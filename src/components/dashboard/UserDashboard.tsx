@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Calendar,
   Heart,
@@ -13,15 +13,16 @@ import {
   Sparkles,
   ArrowRight,
   ExternalLink,
+  Loader2,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { bookingService, Booking } from '../../services/booking';
 
 export const UserDashboard: React.FC = () => {
   const {
     currentUser,
     userProfile,
     membership,
-    bookings,
     buddies,
     activities,
     favorites,
@@ -31,13 +32,49 @@ export const UserDashboard: React.FC = () => {
     setIsChatOpen,
     setActiveChatBooking,
     setActiveChatBuddy,
-    cancelBooking,
     setActiveTab,
   } = useApp();
 
   const [bookingFilter, setBookingFilter] = useState<'all' | 'confirmed' | 'completed' | 'cancelled'>('all');
+  const [apiBookings, setApiBookings] = useState<Booking[]>([]);
+  const [isLoadingBookings, setIsLoadingBookings] = useState<boolean>(true);
+  const [bookingsError, setBookingsError] = useState<string | null>(null);
 
-  const myBookings = bookings.filter((b) => b.user_id === currentUser.id);
+  // Fetch bookings from API
+  const fetchBookings = useCallback(async () => {
+    setIsLoadingBookings(true);
+    setBookingsError(null);
+    try {
+      const response = await bookingService.getBookings();
+      setApiBookings(response.bookings);
+    } catch (err: any) {
+      const apiError = err.response?.data?.error;
+      setBookingsError(apiError?.message || 'Failed to load bookings.');
+      setApiBookings([]);
+    } finally {
+      setIsLoadingBookings(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchBookings();
+  }, [fetchBookings]);
+
+  // Cancel booking via API
+  const handleCancelBooking = async (bookingId: string) => {
+    if (!confirm('Are you sure you want to cancel this booking?')) {
+      return;
+    }
+    try {
+      await bookingService.cancelBooking(bookingId);
+      await fetchBookings(); // Refresh list
+    } catch (err: any) {
+      const apiError = err.response?.data?.error;
+      alert(apiError?.message || 'Failed to cancel booking.');
+    }
+  };
+
+  const myBookings = apiBookings;
   const filteredBookings = myBookings.filter((b) => {
     if (bookingFilter === 'all') return true;
     return b.status === bookingFilter;
@@ -70,7 +107,7 @@ export const UserDashboard: React.FC = () => {
                 </span>
               </div>
               <p className="text-xs text-slate-500">
-                {currentUser.email} • {currentUser.phone_number} • {userProfile.city}
+                {currentUser.email} • {currentUser.phone} • {userProfile.city}
               </p>
             </div>
           </div>
@@ -162,7 +199,29 @@ export const UserDashboard: React.FC = () => {
             </div>
           </div>
 
-          {filteredBookings.length === 0 ? (
+          {/* Loading State */}
+          {isLoadingBookings && (
+            <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-200/80">
+              <Loader2 className="w-10 h-10 text-blue-600 mx-auto mb-2 animate-spin" />
+              <p className="text-sm font-bold text-slate-700">Loading bookings...</p>
+            </div>
+          )}
+
+          {/* Error State */}
+          {!isLoadingBookings && bookingsError && (
+            <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-200/80">
+              <p className="text-sm font-bold text-rose-600">{bookingsError}</p>
+              <button
+                onClick={fetchBookings}
+                className="mt-3 px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
+          {/* Empty State */}
+          {!isLoadingBookings && !bookingsError && filteredBookings.length === 0 && (
             <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-200/80">
               <Calendar className="w-10 h-10 text-slate-400 mx-auto mb-2" />
               <p className="text-sm font-bold text-slate-700">No bookings found in this view</p>
@@ -174,7 +233,10 @@ export const UserDashboard: React.FC = () => {
                 Discover Buddies
               </button>
             </div>
-          ) : (
+          )}
+
+          {/* Bookings List */}
+          {!isLoadingBookings && !bookingsError && filteredBookings.length > 0 && (
             <div className="space-y-4">
               {filteredBookings.map((b) => {
                 const buddyObj = buddies.find((bud) => bud.user.id === b.buddy_id) || buddies[0];
@@ -203,6 +265,8 @@ export const UserDashboard: React.FC = () => {
                                 ? 'bg-blue-100 text-blue-700'
                                 : b.status === 'completed'
                                 ? 'bg-emerald-100 text-emerald-700'
+                                : b.status === 'pending'
+                                ? 'bg-amber-100 text-amber-700'
                                 : 'bg-rose-100 text-rose-700'
                             }`}
                           >
@@ -223,7 +287,7 @@ export const UserDashboard: React.FC = () => {
                     <div className="text-left md:text-right text-xs">
                       <div className="font-bold text-slate-900 flex md:justify-end items-center space-x-1.5">
                         <Clock className="w-3.5 h-3.5 text-slate-400" />
-                        <span>{b.date} at {b.time}</span>
+                        <span>{b.booking_date} at {b.booking_time}</span>
                       </div>
                       <p className="text-slate-500 mt-0.5">
                         Total Amount: <span className="font-black text-slate-900">₹{b.total_amount}</span>
@@ -247,13 +311,9 @@ export const UserDashboard: React.FC = () => {
                         <span>Chat</span>
                       </button>
 
-                      {b.status === 'confirmed' && (
+                      {(b.status === 'confirmed' || b.status === 'pending') && (
                         <button
-                          onClick={() => {
-                            if (confirm('Are you sure you want to cancel this booking?')) {
-                              cancelBooking(b.id);
-                            }
-                          }}
+                          onClick={() => handleCancelBooking(b.id)}
                           className="px-3 py-2 rounded-xl border border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-semibold"
                         >
                           Cancel

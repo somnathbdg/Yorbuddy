@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   CheckCircle2,
   Calendar,
@@ -7,10 +7,10 @@ import {
   MessageCircle,
   X,
   XCircle,
-  FileText,
-  Share2,
+  Loader2,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { bookingService } from '../../services/booking';
 
 export const BookingConfirmationModal: React.FC = () => {
   const {
@@ -23,8 +23,11 @@ export const BookingConfirmationModal: React.FC = () => {
     setIsChatOpen,
     setActiveChatBooking,
     setActiveChatBuddy,
-    cancelBooking,
   } = useApp();
+
+  // Cancellation state
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
 
   if (!isConfirmationModalOpen || !latestConfirmedBooking) return null;
 
@@ -44,10 +47,22 @@ export const BookingConfirmationModal: React.FC = () => {
     setActiveTab('user-dashboard');
   };
 
-  const handleCancel = () => {
-    if (confirm('Are you sure you want to cancel this booking? Full refund will be issued.')) {
-      cancelBooking(booking.id);
+  const handleCancel = async () => {
+    if (!confirm('Are you sure you want to cancel this booking? Full refund will be issued.')) {
+      return;
+    }
+
+    setIsCancelling(true);
+    setCancelError(null);
+
+    try {
+      await bookingService.cancelBooking(booking.id);
       setIsConfirmationModalOpen(false);
+      setIsCancelling(false);
+    } catch (err: any) {
+      setIsCancelling(false);
+      const apiError = err.response?.data?.error;
+      setCancelError(apiError?.message || 'Failed to cancel booking. Please try again.');
     }
   };
 
@@ -70,7 +85,7 @@ export const BookingConfirmationModal: React.FC = () => {
           Booking Confirmed ✓
         </h2>
         <p className="text-sm font-semibold text-pink-600 mt-1">
-          “You&apos;re all set to meet {buddyObj.user.full_name.split(' ')[0]}.”
+          "You're all set to meet {buddyObj.user.full_name.split(' ')[0]}."
         </p>
 
         {/* Booking Card Details */}
@@ -88,7 +103,7 @@ export const BookingConfirmationModal: React.FC = () => {
             <Calendar className="w-4 h-4 text-blue-600 flex-shrink-0" />
             <div>
               <span className="text-[11px] text-slate-400 block font-semibold">Date</span>
-              <span className="text-xs font-bold text-slate-800">{booking.date}</span>
+              <span className="text-xs font-bold text-slate-800">{booking.booking_date}</span>
             </div>
           </div>
 
@@ -97,7 +112,7 @@ export const BookingConfirmationModal: React.FC = () => {
             <div>
               <span className="text-[11px] text-slate-400 block font-semibold">Time & Duration</span>
               <span className="text-xs font-bold text-slate-800">
-                {booking.time} ({booking.duration_hours} {booking.duration_hours === 1 ? 'Hour' : 'Hours'})
+                {booking.booking_time} ({booking.duration_hours} {booking.duration_hours === 1 ? 'Hour' : 'Hours'})
               </span>
             </div>
           </div>
@@ -120,7 +135,7 @@ export const BookingConfirmationModal: React.FC = () => {
           </div>
 
           <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-xs">
-            <span className="text-slate-500 font-medium">Total Paid</span>
+            <span className="text-slate-500 font-medium">Total Payable</span>
             <span className="font-extrabold text-slate-900">₹{booking.total_amount}</span>
           </div>
         </div>
@@ -130,7 +145,14 @@ export const BookingConfirmationModal: React.FC = () => {
           🛡️ Remember to meet at the public seating area. In-app chat is now unlocked.
         </p>
 
-        {/* 3 Action Buttons as explicitly requested */}
+        {/* Cancel error */}
+        {cancelError && (
+          <p className="mt-4 text-xs font-bold text-rose-600 bg-rose-50 p-2 rounded-xl border border-rose-200">
+            {cancelError}
+          </p>
+        )}
+
+        {/* 3 Action Buttons */}
         <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
           <button
             onClick={handleViewDashboard}
@@ -149,10 +171,20 @@ export const BookingConfirmationModal: React.FC = () => {
 
           <button
             onClick={handleCancel}
-            className="w-full py-2.5 rounded-xl border border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-bold transition-colors flex items-center justify-center space-x-1"
+            disabled={isCancelling}
+            className="w-full py-2.5 rounded-xl border border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-bold transition-colors flex items-center justify-center space-x-1 disabled:opacity-50"
           >
-            <XCircle className="w-3.5 h-3.5" />
-            <span>Cancel Booking</span>
+            {isCancelling ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Cancelling...</span>
+              </>
+            ) : (
+              <>
+                <XCircle className="w-3.5 h-3.5" />
+                <span>Cancel Booking</span>
+              </>
+            )}
           </button>
         </div>
       </div>

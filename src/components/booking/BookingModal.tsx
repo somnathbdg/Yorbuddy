@@ -11,15 +11,16 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { bookingService } from '../../services/booking';
 
 export const BookingModal: React.FC = () => {
   const {
     selectedBuddyForBooking,
     setSelectedBuddyForBooking,
     activities,
-    submitBooking,
+    setLatestConfirmedBooking,
+    setIsConfirmationModalOpen,
     currentUser,
-    userProfile,
   } = useApp();
 
   if (!selectedBuddyForBooking) return null;
@@ -44,10 +45,10 @@ export const BookingModal: React.FC = () => {
 
   const hourlyRate = buddy.buddyProfile.hourly_rate;
   const bookingAmount = hourlyRate * durationHours;
-  const platformFee = 0; // Transparent zero fee for verified members
+  const platformFee = 0;
   const totalAmount = bookingAmount + platformFee;
 
-  const handleConfirm = (e: React.FormEvent) => {
+  const handleConfirm = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!safetyAcknowledged) {
       setErrorMessage('Please confirm that you agree to meet in a public place and adhere to the safety policy.');
@@ -57,28 +58,49 @@ export const BookingModal: React.FC = () => {
     setIsProcessing(true);
     setErrorMessage('');
 
-    setTimeout(() => {
-      submitBooking({
-        user_id: currentUser.id,
+    try {
+      const booking = await bookingService.createBooking({
         buddy_id: buddy.user.id,
         activity_id: selectedActivityId,
-        date: bookingDate,
-        time: bookingTime,
+        booking_date: bookingDate,
+        booking_time: bookingTime,
         duration_hours: durationHours,
-        hourly_rate: hourlyRate,
-        booking_amount: bookingAmount,
-        platform_fee: platformFee,
-        total_amount: totalAmount,
-        status: 'confirmed',
         location_name: locationName,
         location_address: locationAddress,
-        special_notes: specialNotes,
-        meet_safety_acknowledged: true,
+        special_notes: specialNotes || undefined,
       });
 
       setIsProcessing(false);
       setSelectedBuddyForBooking(null);
-    }, 900);
+      
+      // Show confirmation modal with the created booking
+      setLatestConfirmedBooking({
+        id: booking.id,
+        booking_code: booking.booking_code,
+        user_id: booking.user_id,
+        buddy_id: booking.buddy_id,
+        activity_id: booking.activity_id,
+        booking_date: booking.booking_date,
+        booking_time: booking.booking_time,
+        duration_hours: booking.duration_hours,
+        hourly_rate: booking.hourly_rate,
+        booking_amount: booking.booking_amount,
+        platform_fee: booking.platform_fee,
+        total_amount: booking.total_amount,
+        status: booking.status as any,
+        location_name: booking.location_name,
+        location_address: booking.location_address,
+        special_notes: booking.special_notes,
+        meet_safety_acknowledged: booking.meet_safety_acknowledged,
+        has_review: booking.has_review,
+        created_at: booking.created_at,
+      });
+      setIsConfirmationModalOpen(true);
+    } catch (err: any) {
+      setIsProcessing(false);
+      const apiError = err.response?.data?.error;
+      setErrorMessage(apiError?.message || 'Failed to create booking. Please try again.');
+    }
   };
 
   return (
@@ -339,7 +361,7 @@ export const BookingModal: React.FC = () => {
                   Safety Reminder Before Payment:
                 </p>
                 <p className="text-xs text-rose-800 font-semibold mt-0.5">
-                  “Meet in a public place. Never share sensitive personal information.”
+                  "Meet in a public place. Never share sensitive personal information."
                 </p>
                 <label className="mt-3 flex items-center space-x-2 cursor-pointer select-none">
                   <input
