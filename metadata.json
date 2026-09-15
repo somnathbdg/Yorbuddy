@@ -1,0 +1,6 @@
+{
+  "name": "YorBuddy",
+  "description": "Verified friendship and companionship platform in India. Real People. Real Connections. Better Moments.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
