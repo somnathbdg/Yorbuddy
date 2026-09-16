@@ -17,6 +17,8 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { bookingService, Booking } from '../../services/booking';
+import { paymentService } from '../../services/payment';
+import { membershipService, MembershipStatus } from '../../services/membership';
 
 export const UserDashboard: React.FC = () => {
   const {
@@ -40,6 +42,15 @@ export const UserDashboard: React.FC = () => {
   const [isLoadingBookings, setIsLoadingBookings] = useState<boolean>(true);
   const [bookingsError, setBookingsError] = useState<string | null>(null);
 
+  // Payment retry state (per booking)
+  const [payProcessingId, setPayProcessingId] = useState<string | null>(null);
+  const [payErrorId, setPayErrorId] = useState<string | null>(null);
+  const [paySuccessId, setPaySuccessId] = useState<string | null>(null);
+
+  // Real membership from API
+  const [apiMembership, setApiMembership] = useState<MembershipStatus | null>(null);
+  const [isLoadingMembership, setIsLoadingMembership] = useState<boolean>(true);
+
   // Fetch bookings from API
   const fetchBookings = useCallback(async () => {
     setIsLoadingBookings(true);
@@ -58,7 +69,22 @@ export const UserDashboard: React.FC = () => {
 
   useEffect(() => {
     fetchBookings();
+    fetchMembershipStatus();
   }, [fetchBookings]);
+
+  // Fetch real membership status from API
+  const fetchMembershipStatus = useCallback(async () => {
+    setIsLoadingMembership(true);
+    try {
+      const data = await membershipService.getMembershipStatus();
+      setApiMembership(data);
+    } catch (err) {
+      console.error('Failed to load membership:', err);
+      setApiMembership(null);
+    } finally {
+      setIsLoadingMembership(false);
+    }
+  }, []);
 
   // Cancel booking via API
   const handleCancelBooking = async (bookingId: string) => {
@@ -71,6 +97,84 @@ export const UserDashboard: React.FC = () => {
     } catch (err: any) {
       const apiError = err.response?.data?.error;
       alert(apiError?.message || 'Failed to cancel booking.');
+    }
+  };
+
+  // Retry payment for pending/unpaid booking
+  const handlePayNow = async (booking: Booking) => {
+    setPayProcessingId(booking.id);
+    setPayErrorId(null);
+    setPaySuccessId(null);
+    try {
+      // Create Razorpay order via backend (server calculates amount)
+      const order = await paymentService.createOrder(booking.id);
+
+      // Open Razorpay Checkout with server-provided order_id, amount, key_id
+      paymentService.openCheckout({
+        key: order.key_id,
+        amount: order.amount,
+        currency: order.currency,
+        order_id: order.order_id,
+        name: 'YorBuddy',
+        description: 'Booking Payment',
+        prefill: {
+          name: currentUser.full_name,
+          email: currentUser.email,
+        },
+        theme: { color: '#2563EB' },
+        handler: async (response: any) => {
+          // DIAGNOSTIC: Log handler firing
+          console.log('[PAYMENT DEBUG] Razorpay success handler fired');
+          console.log('[PAYMENT DEBUG] response.razorpay_order_id:', response.razorpay_order_id);
+          console.log('[PAYMENT DEBUG] response.razorpay_payment_id:', response.razorpay_payment_id);
+          console.log('[PAYMENT DEBUG] response.razorpay_signature:', response.razorpay_signature ? 'present' : 'NULL');
+          
+          // Verify payment with backend — only then mark as success
+          try {
+            console.log('[PAYMENT DEBUG] Calling verifyPayment...');
+            const verifyResult = await paymentService.verifyPayment({
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            });
+            console.log('[PAYMENT DEBUG] verifyPayment succeeded:', JSON.stringify(verifyResult));
+            setPaySuccessId(booking.id);
+            await fetchBookings(); // Refresh booking list to show confirmed status
+          } catch (verifyErr: any) {
+            const verifyError = verifyErr.response?.data?.error;
+            console.error('[PAYMENT DEBUG] verifyPayment failed:', verifyError?.message || verifyErr.message);
+            console.error('[PAYMENT DEBUG] Full error:', JSON.stringify(verifyErr.response?.data || verifyErr));
+            setPayErrorId(booking.id);
+          }
+        },
+        onDismiss: () => {
+          // User closed checkout without paying — keep booking PENDING
+          setPayErrorId(booking.id);
+          console.log('Payment checkout dismissed for booking', booking.id);
+        },
+        onError: (err: any) => {
+          // Razorpay checkout failed to load or encountered an error
+          setPayErrorId(booking.id);
+          console.error('Payment checkout error:', err.message);
+        },
+      });
+    } catch (err: any) {
+      const apiError = err.response?.data?.error;
+      setPayErrorId(booking.id);
+      console.error('Payment initiation failed:', apiError?.message || err.message);
+      // If a previous successful payment exists but booking is still pending, inform user
+      try {
+        const paymentStatus = await paymentService.getPaymentStatus(booking.id);
+        if (paymentStatus && paymentStatus.status === 'success') {
+          setPayErrorId(null);
+          setPaySuccessId(booking.id);
+          await fetchBookings();
+        }
+      } catch {
+        // ignore — keep the error message
+      }
+    } finally {
+      setPayProcessingId(null);
     }
   };
 
@@ -112,20 +216,30 @@ export const UserDashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Membership Badge Card */}
+          {/* Membership Badge Card - fetches real membership from API */}
           <div className="flex items-center space-x-3 p-3.5 bg-gradient-to-r from-blue-50 to-pink-50 rounded-2xl border border-pink-200">
             <ShieldCheck className="w-8 h-8 text-pink-600 flex-shrink-0" />
             <div>
               <div className="flex items-center space-x-1.5">
                 <span className="text-xs font-black text-slate-900">
-                  Membership: Active ✓
+                  Membership: {apiMembership ? (apiMembership.is_active ? 'Active ✓' : 'Inactive') : 'Loading...'}
                 </span>
-                <span className="px-1.5 py-0.5 rounded bg-pink-100 text-pink-700 text-[10px] font-bold">
-                  ₹499 Paid
-                </span>
+                {apiMembership && (
+                  <span className="px-1.5 py-0.5 rounded bg-pink-100 text-pink-700 text-[10px] font-bold">
+                    ₹{apiMembership.amount} Paid
+                  </span>
+                )}
               </div>
               <p className="text-[11px] text-slate-600">
-                One-Time Lifetime Plan (No monthly charges)
+                {apiMembership
+                  ? (apiMembership.plan_id === 'MONTH_1' ? '1 Month Plan'
+                    : apiMembership.plan_id === 'MONTH_6' ? '6 Months Plan'
+                    : apiMembership.plan_id === 'YEAR_1' ? '1 Year Plan'
+                    : 'Lifetime Plan')
+                    + (apiMembership.expiry_date
+                      ? ' • Expires ' + new Date(apiMembership.expiry_date).toLocaleDateString('en-IN')
+                      : ' • Never expires')
+                  : 'Loading membership...'}
               </p>
             </div>
           </div>
@@ -298,7 +412,29 @@ export const UserDashboard: React.FC = () => {
                     </div>
 
                     {/* Actions */}
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-1.5">
+                      {b.status === 'pending' && (
+                        <button
+                          onClick={() => handlePayNow(b)}
+                          disabled={payProcessingId === b.id}
+                          className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-pink-500 to-blue-600 hover:from-pink-600 hover:to-blue-700 text-white text-xs font-bold flex items-center space-x-1 shadow-xs disabled:opacity-50 transition-all"
+                        >
+                          <CreditCard className="w-3.5 h-3.5" />
+                          <span>{payProcessingId === b.id ? 'Processing...' : 'Pay ₹' + b.total_amount}</span>
+                        </button>
+                      )}
+
+                      {payErrorId === b.id && (
+                        <p className="text-[11px] font-bold text-rose-600 bg-rose-50 px-2 py-1 rounded-lg">
+                          Payment failed. You can try again.
+                        </p>
+                      )}
+                      {paySuccessId === b.id && (
+                        <p className="text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">
+                          Payment successful! Booking confirmed.
+                        </p>
+                      )}
+
                       <button
                         onClick={() => {
                           setActiveChatBooking(b);

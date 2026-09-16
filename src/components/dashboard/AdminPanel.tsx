@@ -180,7 +180,7 @@ export const AdminPanel: React.FC = () => {
               <IndianRupee className="w-4 h-4 text-amber-500" />
             </div>
             <div className="text-2xl font-black text-slate-900">₹24,05,180</div>
-            <p className="text-[11px] text-emerald-600 font-semibold">₹499 one-time registrations</p>
+            <p className="text-[11px] text-emerald-600 font-semibold">membership registrations</p>
           </div>
         </div>
 

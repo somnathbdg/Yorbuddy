@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { bookingService } from '../../services/booking';
+import { membershipService } from '../../services/membership';
 
 export const BookingModal: React.FC = () => {
   const {
@@ -29,7 +30,7 @@ export const BookingModal: React.FC = () => {
 
   // Form states
   const [selectedActivityId, setSelectedActivityId] = useState<string>(
-    buddy.buddyProfile.supported_activity_ids[0] || 'act-1'
+    buddy.buddyProfile.supported_activity_ids[0] || ''
   );
   const [bookingDate, setBookingDate] = useState<string>('2026-09-20');
   const [bookingTime, setBookingTime] = useState<string>('4:00 PM');
@@ -41,6 +42,7 @@ export const BookingModal: React.FC = () => {
   const [paymentMethod, setPaymentMethod] = useState<'upi' | 'credit_card' | 'debit_card' | 'net_banking'>('upi');
   const [upiId, setUpiId] = useState<string>('somnath@okhdfcbank');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [membershipError, setMembershipError] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
 
   const hourlyRate = buddy.buddyProfile.hourly_rate;
@@ -57,6 +59,20 @@ export const BookingModal: React.FC = () => {
 
     setIsProcessing(true);
     setErrorMessage('');
+    setMembershipError(null);
+
+    // Check membership before creating booking
+    try {
+      const membershipStatus = await membershipService.getMembershipStatus();
+      if (!membershipStatus || !membershipStatus.is_active) {
+        setMembershipError('Active membership is required to book a Buddy. Please purchase a membership plan.');
+        setIsProcessing(false);
+        return;
+      }
+    } catch (err) {
+      // If membership check fails, still try to create booking (backend will enforce)
+      console.error('Membership check failed:', err);
+    }
 
     try {
       const booking = await bookingService.createBooking({
@@ -163,13 +179,15 @@ export const BookingModal: React.FC = () => {
               onChange={(e) => setSelectedActivityId(e.target.value)}
               className="w-full p-3 rounded-2xl bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
             >
-              {activities
-                .filter((act) => buddy.buddyProfile.supported_activity_ids.includes(act.id))
-                .map((act) => (
-                  <option key={act.id} value={act.id}>
-                    {act.title} — {act.description}
+              {buddy.buddyProfile.supported_activity_ids.length > 0 ? (
+                buddy.buddyProfile.supported_activity_ids.map((actId, index) => (
+                  <option key={actId} value={actId}>
+                    Activity {index + 1}
                   </option>
-                ))}
+                ))
+              ) : (
+                <option value="">No activities available</option>
+              )}
             </select>
           </div>
 
@@ -384,11 +402,27 @@ export const BookingModal: React.FC = () => {
             </p>
           )}
 
+          {/* Membership Error Message */}
+          {membershipError && (
+            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200">
+              <p className="text-xs font-bold text-rose-600">{membershipError}</p>
+              <button
+                onClick={() => {
+                  // Navigate to pricing page
+                  window.dispatchEvent(new CustomEvent('yorbuddy:navigate', { detail: 'pricing' }));
+                }}
+                className="mt-2 text-xs font-bold text-blue-600 hover:underline"
+              >
+                View Membership Plans →
+              </button>
+            </div>
+          )}
+
           {/* Submit Button */}
           <button
             id="confirm-booking-submit-btn"
             type="submit"
-            disabled={isProcessing}
+            disabled={isProcessing || !!membershipError}
             className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-blue-600 via-blue-500 to-pink-500 text-white font-black text-sm shadow-lg shadow-blue-500/25 hover:opacity-95 transition-opacity disabled:opacity-50 flex items-center justify-center space-x-2"
           >
             {isProcessing ? (

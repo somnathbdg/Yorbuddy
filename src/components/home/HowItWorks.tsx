@@ -124,7 +124,7 @@ export const HowItWorks: React.FC = () => {
             }}
             className="w-full md:w-auto px-6 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs whitespace-nowrap shadow-md transition-colors"
           >
-            Get Started (₹499 One-Time)
+            Get Started
           </button>
         </div>
       </div>

@@ -100,7 +100,7 @@ export const Footer: React.FC = () => {
               </li>
               <li>
                 <button onClick={() => setActiveTab('pricing')} className="hover:text-white transition-colors">
-                  Pricing (₹499 One-Time)
+                  Pricing
                 </button>
               </li>
               <li>

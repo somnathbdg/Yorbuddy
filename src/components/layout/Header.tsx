@@ -433,7 +433,7 @@ export const Header: React.FC = () => {
                 }}
                 className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-pink-500 text-white text-xs font-bold text-center shadow-md shadow-blue-500/20"
               >
-                Join (₹499 Lifetime)
+                Join
               </button>
             </div>
           </div>

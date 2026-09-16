@@ -7,6 +7,8 @@ import authRoutes from './routes/auth.js';
 import userRoutes from './routes/users.js';
 import buddyRoutes from './routes/buddies.js';
 import bookingRoutes from './routes/bookings.js';
+import paymentRoutes from './routes/payments.js';
+import membershipRoutes from './routes/memberships.js';
 import { checkAuthSchema } from './middleware/auth.js';
 
 /**
@@ -20,8 +22,18 @@ export function createApp(): Express {
   app.use(corsMiddleware);
 
   // Body parsing
-  app.use(express.json({ limit: '10mb' }));
+  // Save raw body for webhook signature verification (must be before JSON parsing)
+  app.use(express.json({
+    limit: '10mb',
+    verify: (req: any, _res, buf) => {
+      if (req.url?.startsWith('/api/payments/webhook')) {
+        req.rawBody = buf.toString('utf8');
+      }
+    },
+  }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+  // Note: webhook route uses the rawBody saved above
 
   // Compression
   app.use(compressionMiddleware);
@@ -48,8 +60,13 @@ export function createApp(): Express {
   // Booking routes
   app.use('/api/bookings', bookingRoutes);
 
+  // Payment routes
+  app.use('/api/payments', paymentRoutes);
+
+  // Membership routes
+  app.use('/api/memberships', membershipRoutes);
+
   // API routes will be added here in subsequent steps
-  // app.use('/api/bookings', bookingRoutes);
   // app.use('/api/payments', paymentRoutes);
   // app.use('/api/chat', chatRoutes);
   // app.use('/api/reviews', reviewRoutes);

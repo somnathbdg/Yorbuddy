@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { getSupabase } from '../config/database.js';
 import { z } from 'zod';
 import { NotFound } from '../middleware/errorHandler.js';
+import { checkUserMembership } from './membershipService.js';
 
 // ========== Validation Schemas ==========
 
@@ -150,8 +151,17 @@ export async function searchBuddies(req: Request, res: Response, next: NextFunct
       .select('user_id, photo_url, city, area, languages, interests')
       .in('user_id', userIds);
 
-    // Step 3: Apply profile-based filters in memory
-    let filteredBuddies = buddyProfiles.map((bp: any) => {
+    // Step 3: Filter by active membership (buddies must have active membership)
+    let membershipFilteredBuddies = [];
+    for (const bp of buddyProfiles) {
+      const membershipCheck = await checkUserMembership(supabase, bp.user_id);
+      if (membershipCheck.isActive) {
+        membershipFilteredBuddies.push(bp);
+      }
+    }
+
+    // Step 4: Apply profile-based filters in memory
+    let filteredBuddies = membershipFilteredBuddies.map((bp: any) => {
       const user = users?.find((u: any) => u.id === bp.user_id);
       const profile = profiles?.find((p: any) => p.user_id === bp.user_id);
       return { ...bp, user, profile };

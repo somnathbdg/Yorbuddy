@@ -14,6 +14,7 @@ import {
   Users,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { membershipService } from '../../services/membership';
 
 export const BecomeABuddyView: React.FC = () => {
   const { activities, setActiveTab, currentUser, setCurrentUser } = useApp();
@@ -27,6 +28,7 @@ export const BecomeABuddyView: React.FC = () => {
     'act-5',
   ]);
   const [applicationSubmitted, setApplicationSubmitted] = useState(false);
+  const [membershipError, setMembershipError] = useState<string | null>(null);
 
   const toggleActivity = (id: string) => {
     setSelectedActivities((prev) =>
@@ -34,8 +36,21 @@ export const BecomeABuddyView: React.FC = () => {
     );
   };
 
-  const handleApplySuccess = (e: React.FormEvent) => {
+  const handleApplySuccess = async (e: React.FormEvent) => {
     e.preventDefault();
+    setMembershipError(null);
+
+    // Check membership before submitting application
+    try {
+      const membershipStatus = await membershipService.getMembershipStatus();
+      if (!membershipStatus || !membershipStatus.is_active) {
+        setMembershipError('Active membership is required to become a Buddy. Please purchase a membership plan.');
+        return;
+      }
+    } catch (err) {
+      console.error('Membership check failed:', err);
+    }
+
     setApplicationSubmitted(true);
   };
 

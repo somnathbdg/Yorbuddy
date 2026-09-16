@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { getSupabase } from '../config/database.js';
 import { z } from 'zod';
 import { BadRequest, NotFound, Forbidden, Conflict } from '../middleware/errorHandler.js';
+import { checkUserMembership } from './membershipService.js';
 
 // ========== Validation Schemas ==========
 
@@ -128,12 +129,29 @@ export async function createBooking(req: Request, res: Response, next: NextFunct
   try {
     const input = createBookingSchema.parse(req.body);
     const userId = req.user!.id;
+    const userRole = req.user!.role;
     const supabase = getSupabase();
+
+    // Check companion membership (skip for admin)
+    if (userRole !== 'admin') {
+      const companionCheck = await checkUserMembership(supabase, userId);
+      if (!companionCheck.isActive) {
+        throw Forbidden('Active membership is required to book a Buddy.');
+      }
+    }
 
     // Verify buddy exists and get hourly rate
     const buddy = await getBuddyProfile(supabase, input.buddy_id);
     if (!buddy) {
       throw NotFound('Buddy not found or not available for bookings.');
+    }
+
+    // Check buddy membership (skip for admin)
+    if (userRole !== 'admin') {
+      const buddyCheck = await checkUserMembership(supabase, buddy.userId);
+      if (!buddyCheck.isActive) {
+        throw Forbidden('This Buddy does not have an active membership and cannot accept bookings.');
+      }
     }
 
     // Verify activity exists

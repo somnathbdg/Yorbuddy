@@ -284,7 +284,7 @@ export const AuthModal: React.FC = () => {
                 3. Verification
               </span>
               <span className={registerStep >= 4 ? 'text-pink-600' : 'text-slate-400'}>
-                4. ₹499 Fee
+                4. Membership Payment
               </span>
             </div>
             <div className="w-full bg-slate-200 h-1.5 rounded-full mt-1.5 overflow-hidden">
@@ -377,7 +377,7 @@ export const AuthModal: React.FC = () => {
                   }}
                   className="text-xs font-bold text-pink-600 hover:underline"
                 >
-                  Join YorBuddy (₹499 One-Time)
+                  Join YorBuddy
                 </button>
               </div>
             </form>
@@ -397,7 +397,7 @@ export const AuthModal: React.FC = () => {
               <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200 text-left max-w-sm mx-auto space-y-2 text-xs">
                 <div className="flex items-center space-x-2 text-emerald-800 font-bold">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                  <span>Lifetime Membership Activated (₹499)</span>
+                  <span>Membership Activated</span>
                 </div>
                 <p className="text-emerald-700 text-[11px]">
                   No monthly recurring charges. You have unlimited access to browse verified companions across all Indian cities.
@@ -821,16 +821,16 @@ export const AuthModal: React.FC = () => {
                       <div>
                         <h4 className="text-sm font-black text-slate-900">YorBuddy Membership</h4>
                         <p className="text-xs text-slate-500">
-                          One-Time Lifetime Registration & Verification
+                          Membership Registration & Verification
                         </p>
                       </div>
                       <div className="text-right">
-                        <span className="text-2xl font-black text-slate-900">₹499</span>
+                        <span className="text-2xl font-black text-slate-900">Membership</span>
                       </div>
                     </div>
 
                     <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-900 font-semibold">
-                      ⚡ Important: This ₹499 fee is a <strong>ONE-TIME REGISTRATION FEE</strong>. It is NOT monthly, weekly, or recurring.
+                      ⚡ Important: This membership fee provides full platform access. It is NOT monthly, weekly, or recurring.
                     </div>
 
                     {/* Benefits Checklist */}
@@ -864,7 +864,7 @@ export const AuthModal: React.FC = () => {
 
                     <div className="pt-3 border-t border-slate-200 flex items-center justify-between text-sm font-black text-slate-900">
                       <span>Total Amount:</span>
-                      <span className="text-lg text-pink-600">₹499</span>
+                      <span className="text-lg text-pink-600">Membership</span>
                     </div>
                   </div>
 
@@ -934,10 +934,10 @@ export const AuthModal: React.FC = () => {
                       {isProcessingPayment ? (
                         <span className="flex items-center space-x-2">
                           <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                          <span>Processing ₹499...</span>
+                          <span>Processing...</span>
                         </span>
                       ) : (
-                        <span>Pay ₹499 & Activate Account</span>
+                        <span>Pay & Activate Account</span>
                       )}
                     </button>
                   </div>

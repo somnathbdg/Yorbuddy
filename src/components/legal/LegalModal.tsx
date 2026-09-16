@@ -133,9 +133,9 @@ export const LegalModal: React.FC = () => {
               <p>
                 • <strong>Companion No-Show:</strong> 100% full refund with an apology courtesy credit. The companion profile will undergo administrative review.
               </p>
-              <h4 className="text-base font-bold text-slate-900">2. ₹499 One-Time Membership Fee</h4>
+              <h4 className="text-base font-bold text-slate-900">2. Membership Fee</h4>
               <p>
-                The ₹499 registration fee covers government identity KYC verification, video compliance audit, and platform account provisioning. Once an account is approved and identity is verified, this one-time fee is non-refundable. If your KYC is rejected by our Trust & Safety team and cannot be resolved, a full refund of ₹499 is issued immediately.
+                The membership fee covers government identity KYC verification, video compliance audit, and platform account provisioning. Once an account is approved and identity is verified, this fee is non-refundable. If your KYC is rejected by our Trust & Safety team and cannot be resolved, a full refund is issued immediately.
               </p>
             </div>
           )}
