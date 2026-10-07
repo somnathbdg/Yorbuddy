@@ -195,9 +195,11 @@ async function api(method, reqPath, body, token) {
   // Test 12: Buddy without membership not publicly discoverable
   console.log('\n=== Test 12: Buddy membership filter ===');
   try {
-    const searchRes = await fetch('http://localhost:3001/api/buddies?per_page=50');
+    const searchRes = await fetch('http://localhost:3001/api/buddies?per_page=50', {
+      headers: { Authorization: 'Bearer ' + token },
+    });
     const searchData = await searchRes.json();
-    if (searchRes.status !== 200) throw new Error('Search failed');
+    if (searchRes.status !== 200) throw new Error('Search failed with status ' + searchRes.status);
 
     let allHaveMembership = true;
     for (const buddy of searchData.data) {
@@ -231,11 +233,15 @@ async function api(method, reqPath, body, token) {
     if (!buddy || buddy.length === 0 || !activity || activity.length === 0) throw new Error('No buddy/activity data');
 
     // Create a booking — note: this may fail if buddy lacks membership, which is correct behavior
+    // Random far-future slot so repeated runs do not collide with earlier bookings.
+    const t13Date = new Date(Date.now() + (60 + Math.floor(Math.random() * 300)) * 86400000)
+      .toISOString().slice(0, 10);
+    const t13Time = String(8 + Math.floor(Math.random() * 12)).padStart(2, '0') + ':00:00';
     const bookingRes = await api('POST', '/api/bookings', {
       buddy_id: buddy[0].user_id,
       activity_id: activity[0].id,
-      booking_date: '2026-12-30',
-      booking_time: '14:00:00',
+      booking_date: t13Date,
+      booking_time: t13Time,
       duration_hours: 2,
       location_name: 'Test',
       location_address: 'Pune',
@@ -308,9 +314,11 @@ async function api(method, reqPath, body, token) {
   console.log('\n=== Test 16: Sensitive field exposure ===');
   try {
     // Check buddy search response for sensitive fields
-    const searchRes = await fetch('http://localhost:3001/api/buddies?per_page=5');
+    const searchRes = await fetch('http://localhost:3001/api/buddies?per_page=5', {
+      headers: { Authorization: 'Bearer ' + token },
+    });
     const searchData = await searchRes.json();
-    if (searchRes.status !== 200) throw new Error('Search failed');
+    if (searchRes.status !== 200) throw new Error('Search failed with status ' + searchRes.status);
 
     let sensitiveFound = false;
     for (const buddy of searchData.data) {

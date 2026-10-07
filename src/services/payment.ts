@@ -40,7 +40,7 @@ class PaymentService {
    * Returns the latest payment record or null.
    */
   async getPaymentStatus(bookingId: string): Promise<any> {
-    const response = await apiClient.get();
+    const response = await apiClient.get(`/payments/status/${bookingId}`);
     return response.data.data;
   }
 

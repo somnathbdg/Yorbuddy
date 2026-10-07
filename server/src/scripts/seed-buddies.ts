@@ -62,10 +62,20 @@ async function seedBuddies() {
   // Load activity ID mapping
   await loadActivityMap(supabase);
 
-  // Build seed users array
+  // Build seed users array.
+  //
+  // Passwords: seeded buddies are demo/reference data and are NOT meant to be
+  // logged into. We deliberately do NOT write a password_hash at all, so the
+  // accounts have no usable password. Previously this wrote a fake
+  // `argon2id$hashed$...` string, which the application can never verify (see
+  // utils/password.ts) and which implied a password that did not exist.
+  //
+  // If you need to log in as a seeded buddy, use the admin password reset
+  // utility (src/scripts/reset-admin-password.ts) which writes a real hash
+  // using the application's own hashPassword() function.
   const seedUsers = BUDDY_SEED_DATA.map(b => ({
     email: `${b.name.toLowerCase().replace(/\s+/g, '.')}@yorbuddy.in`,
-    password_hash: `argon2id$hashed$${b.origId}`,
+    password_hash: null,
     phone: `98${String(parseInt(b.origId.replace('usr-b', ''))).padStart(8, '0')}`,
     full_name: b.name,
     dob: b.dob,
@@ -140,8 +150,8 @@ async function seedBuddies() {
       bio: b.bio,
       rating: b.rating,
       review_count: b.reviews,
-      is_verified: true,
-      verification_status: 'approved',
+      is_verified: false,
+      verification_status: 'pending',
       total_earnings: b.reviews * b.rate * 1.5,
       profile_views: b.reviews * 12 + 250,
       is_online: b.online,
@@ -163,12 +173,67 @@ async function seedBuddies() {
   }
   console.log(`[SEED] Upserted ${upsertedBuddyProfiles?.length || 0} buddy profiles`);
 
+  // Step 4: Create active membership records for each buddy
+  // Buddies must have active memberships to appear in Buddy Search (membership enforcement)
+  // First, delete existing membership records for these users to avoid duplicates
+  const userIds = Array.from(userMap.values());
+  const { error: deleteError } = await supabase
+    .from('memberships')
+    .delete()
+    .in('user_id', userIds);
+
+  if (deleteError) {
+    console.error('[SEED] Error deleting existing memberships:', deleteError);
+    throw deleteError;
+  }
+
+  const now = new Date();
+  const oneMonthLater = new Date(now);
+  oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
+
+  const seedMemberships = BUDDY_SEED_DATA.map(b => {
+    const email = `${b.name.toLowerCase().replace(/\s+/g, '.')}@yorbuddy.in`;
+    const userId = userMap.get(email);
+    return {
+      user_id: userId,
+      plan_id: 'MONTH_1',
+      amount: 199,
+      currency: 'INR',
+      razorpay_order_id: `order_buddy_${b.origId}_${now.getTime()}`,
+      razorpay_payment_id: `pay_buddy_${b.origId}_${now.getTime()}`,
+      razorpay_signature: `sig_buddy_${b.origId}_${now.getTime()}`,
+      status: 'success',
+      membership_start_date: now.toISOString(),
+      membership_expiry_date: oneMonthLater.toISOString(),
+    };
+  });
+
+  // Filter out any without user_id
+  const validMemberships = seedMemberships.filter(m => m.user_id);
+
+  if (validMemberships.length > 0) {
+    const { error: membershipError } = await supabase
+      .from('memberships')
+      .insert(validMemberships);
+
+    if (membershipError) {
+      console.error('[SEED] Error inserting memberships:', membershipError);
+      throw membershipError;
+    }
+    console.log(`[SEED] Inserted ${validMemberships.length} membership records`);
+  }
+
   // Verify counts
   const { count: buddyCount } = await supabase
     .from('buddy_profiles')
     .select('*', { count: 'exact', head: true });
 
+  const { count: membershipCount } = await supabase
+    .from('memberships')
+    .select('*', { count: 'exact', head: true });
+
   console.log(`[SEED] Total buddy_profiles in database: ${buddyCount}`);
+  console.log(`[SEED] Total memberships in database: ${membershipCount}`);
   console.log('[SEED] Done!');
 }
 

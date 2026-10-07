@@ -20,7 +20,6 @@ export const BookingConfirmationModal: React.FC = () => {
     isConfirmationModalOpen,
     setIsConfirmationModalOpen,
     latestConfirmedBooking,
-    buddies,
     activities,
     currentUser,
     setActiveTab,
@@ -41,7 +40,39 @@ export const BookingConfirmationModal: React.FC = () => {
   if (!isConfirmationModalOpen || !latestConfirmedBooking) return null;
 
   const booking = latestConfirmedBooking;
-  const buddyObj = buddies.find((b) => b.user.id === booking.buddy_id) || buddies[0];
+  // Resolve buddy: use only API-provided booking.buddy summary.
+  // Never fall back to local mock data — each booking keeps its own buddy.
+  const buddyObj = booking.buddy
+    ? {
+        user: { id: booking.buddy.id, full_name: booking.buddy.full_name },
+        profile: {
+          photo_url: booking.buddy.photo_url || '',
+          city: booking.buddy.city || '',
+          area: '',
+          languages: [],
+          interests: [],
+        },
+        buddyProfile: {
+          id: '',
+          hourly_rate: booking.buddy.hourly_rate || 0,
+          headline: '',
+          bio: '',
+          rating: booking.buddy.rating || 0,
+          review_count: booking.buddy.review_count || 0,
+          is_verified: booking.buddy.is_verified || false,
+          is_online: false,
+          response_time: booking.buddy.response_time || '',
+          badge_text: booking.buddy.badge_text || '',
+          supported_activity_ids: [],
+          safety_pledge_signed: true,
+        },
+      }
+    : null;
+  const buddyName = buddyObj
+    ? buddyObj.user.full_name
+    : booking.buddy_id
+    ? `Buddy (${booking.buddy_id.slice(0, 8)})`
+    : 'Unknown Buddy';
   const activityObj = activities.find((a) => a.id === booking.activity_id) || activities[0];
 
   const handleMessageBuddy = () => {
@@ -137,10 +168,12 @@ export const BookingConfirmationModal: React.FC = () => {
         </div>
 
         <h2 className="text-2xl font-black text-slate-900 tracking-tight">
-          Booking Created ✓
+          {paymentSuccess ? 'Booking Confirmed ✓' : 'Booking Created ✓'}
         </h2>
         <p className="text-sm font-semibold text-pink-600 mt-1">
-          Complete payment to confirm your booking with {buddyObj.user.full_name.split(' ')[0]}.
+          {paymentSuccess 
+            ? `Your booking with ${buddyName.split(' ')[0]} is confirmed.`
+            : `Complete payment to confirm your booking with ${buddyName.split(' ')[0]}.`}
         </p>
 
         {/* Booking Card Details */}

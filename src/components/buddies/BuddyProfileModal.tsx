@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { calculateCompatibility } from '../../utils/matching';
+import { getPhotoUrls } from '../../utils/photo';
 
 export const BuddyProfileModal: React.FC = () => {
   const {
@@ -39,11 +40,11 @@ export const BuddyProfileModal: React.FC = () => {
   const isFav = favorites.includes(buddy.user.id);
   const comp = calculateCompatibility(userProfile, buddy.buddyProfile, buddy.profile);
 
-  // All photo URLs (main + gallery)
-  const allPhotos = [
+  // All photo URLs (main + gallery), with fallback for null/empty entries
+  const allPhotos = getPhotoUrls([
     buddy.profile.photo_url,
     ...(buddy.profile.gallery_urls || []),
-  ];
+  ]);
 
   // Filter buddy reviews
   const buddyReviews = reviews.filter((r) => r.buddy_id === buddy.user.id);

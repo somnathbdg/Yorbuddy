@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { getSupabase } from '../config/database.js';
+import { env } from '../config/env.js';
 import { z } from 'zod';
 import { BadRequest, NotFound, Forbidden, Conflict } from '../middleware/errorHandler.js';
 import { checkUserMembership } from './membershipService.js';
@@ -25,7 +26,69 @@ const bookingIdSchema = z.object({
   id: z.string().uuid('Invalid booking ID'),
 });
 
-// ========== Helper Functions ==========
+// ========== Pagination Constants & Helper ==========
+
+const DEFAULT_PAGE = 1;
+const DEFAULT_LIMIT = 20;
+const MAX_LIMIT = 100;
+
+/**
+ * Parse and validate pagination parameters from query string.
+ * Returns safe defaults for missing/invalid params.
+ * Throws BadRequest for malformed values.
+ */
+export function parsePaginationParams(query: Record<string, unknown>): { page: number; limit: number } {
+  let page = DEFAULT_PAGE;
+  let limit = DEFAULT_LIMIT;
+
+  if (query.page !== undefined) {
+    const raw = String(query.page);
+    const parsed = Number(raw);
+    if (!Number.isInteger(parsed) || parsed < 1) {
+      throw BadRequest('Invalid page parameter. Must be a positive integer.');
+    }
+    page = parsed;
+  }
+
+  if (query.limit !== undefined) {
+    const raw = String(query.limit);
+    const parsed = Number(raw);
+    if (!Number.isInteger(parsed) || parsed < 1) {
+      throw BadRequest('Invalid limit parameter. Must be a positive integer.');
+    }
+    if (parsed > MAX_LIMIT) {
+      throw BadRequest(`Limit cannot exceed ${MAX_LIMIT}.`);
+    }
+    limit = parsed;
+  }
+
+  return { page, limit };
+}
+
+// ========== Helper: Build safe public buddy summary ==========
+// Exposes ONLY public, non-sensitive buddy info needed for booking UI.
+// Deliberately excludes: email, phone, password_hash, tokens, dob, doc URLs, etc.
+function buildBuddySummary(userRow: any, profileRow: any, buddyProfileRow: any) {
+  if (!userRow) return null;
+  const summary: Record<string, any> = {
+    id: userRow.id,
+    full_name: userRow.full_name,
+  };
+  if (profileRow) {
+    summary.photo_url = profileRow.photo_url;
+    summary.city = profileRow.city;
+    summary.area = profileRow.area;
+  }
+  if (buddyProfileRow) {
+    summary.hourly_rate = buddyProfileRow.hourly_rate;
+    summary.rating = buddyProfileRow.rating;
+    summary.review_count = buddyProfileRow.review_count;
+    summary.is_verified = buddyProfileRow.is_verified;
+    summary.badge_text = buddyProfileRow.badge_text;
+    summary.response_time = buddyProfileRow.response_time;
+  }
+  return summary;
+}
 
 function generateBookingCode(): string {
   const prefix = 'YB';
@@ -63,12 +126,12 @@ async function getBuddyProfile(supabase: any, buddyId: string) {
   };
 }
 
-async function checkOverlap(supabase: any, buddyId: string, bookingDate: string, bookingTime: string, durationHours: number, excludeBookingId?: string) {
-  // Get all active bookings for this buddy on this date
+async function checkOverlap(supabase: any, buddyId: string, userId: string, bookingDate: string, bookingTime: string, durationHours: number, excludeBookingId?: string): Promise<{ hasOverlap: boolean; conflictType: 'user' | 'buddy' | null }> {
+  // Get all active bookings for this buddy OR this user on this date
+  // Only pending and confirmed bookings block slots - expired/cancelled/rejected do not
   const { data: existingBookings, error } = await supabase
     .from('bookings')
-    .select('id, booking_time, duration_hours, status')
-    .eq('buddy_id', buddyId)
+    .select('id, booking_time, duration_hours, status, user_id, buddy_id')
     .eq('booking_date', bookingDate)
     .in('status', ['pending', 'confirmed']);
 
@@ -77,7 +140,7 @@ async function checkOverlap(supabase: any, buddyId: string, bookingDate: string,
   }
 
   if (!existingBookings || existingBookings.length === 0) {
-    return false;
+    return { hasOverlap: false, conflictType: null };
   }
 
   // Parse time to minutes for overlap check
@@ -95,17 +158,25 @@ async function checkOverlap(supabase: any, buddyId: string, bookingDate: string,
 
   for (const booking of existingBookings) {
     if (excludeBookingId && booking.id === excludeBookingId) continue;
+
+    // Check overlap only for same buddy OR same user
+    const sameBuddy = booking.buddy_id === buddyId;
+    const sameUser = booking.user_id === userId;
+    if (!sameBuddy && !sameUser) continue;
     
     const existingStart = parseTime(booking.booking_time);
     const existingEnd = existingStart + booking.duration_hours * 60;
 
     // Check overlap
     if (newStart < existingEnd && newEnd > existingStart) {
-      return true;
+      return { 
+        hasOverlap: true, 
+        conflictType: sameUser ? 'user' : 'buddy'
+      };
     }
   }
 
-  return false;
+  return { hasOverlap: false, conflictType: null };
 }
 
 function canCancel(status: string): boolean {
@@ -114,11 +185,12 @@ function canCancel(status: string): boolean {
 
 function canUpdateStatus(currentStatus: string, newStatus: string): boolean {
   const allowedTransitions: Record<string, string[]> = {
-    pending: ['confirmed', 'rejected', 'cancelled'],
+    pending: ['confirmed', 'rejected', 'cancelled', 'expired'],
     confirmed: ['completed', 'cancelled'],
     completed: [],
     cancelled: [],
     rejected: [],
+    expired: [],
   };
   return allowedTransitions[currentStatus]?.includes(newStatus) || false;
 }
@@ -132,18 +204,17 @@ export async function createBooking(req: Request, res: Response, next: NextFunct
     const userRole = req.user!.role;
     const supabase = getSupabase();
 
-    // Check companion membership (skip for admin)
-    if (userRole !== 'admin') {
-      const companionCheck = await checkUserMembership(supabase, userId);
-      if (!companionCheck.isActive) {
-        throw Forbidden('Active membership is required to book a Buddy.');
-      }
-    }
+
 
     // Verify buddy exists and get hourly rate
     const buddy = await getBuddyProfile(supabase, input.buddy_id);
     if (!buddy) {
       throw NotFound('Buddy not found or not available for bookings.');
+    }
+
+    // Prevent self-booking: a user cannot book themselves as a buddy
+    if (buddy.userId === userId) {
+      throw Conflict('You cannot book yourself as a buddy.');
     }
 
     // Check buddy membership (skip for admin)
@@ -174,9 +245,13 @@ export async function createBooking(req: Request, res: Response, next: NextFunct
     }
 
     // Check for overlapping bookings
-    const hasOverlap = await checkOverlap(supabase, input.buddy_id, input.booking_date, input.booking_time, input.duration_hours);
-    if (hasOverlap) {
-      throw Conflict('This buddy is already booked for an overlapping time slot on this date.');
+    const overlap = await checkOverlap(supabase, input.buddy_id, userId, input.booking_date, input.booking_time, input.duration_hours);
+    if (overlap.hasOverlap) {
+      if (overlap.conflictType === 'user') {
+        throw Conflict('You already have a booking during this time. Please choose a different time slot.');
+      } else {
+        throw Conflict('This buddy is already booked for an overlapping time slot on this date.');
+      }
     }
 
     // Calculate pricing server-side
@@ -187,6 +262,9 @@ export async function createBooking(req: Request, res: Response, next: NextFunct
 
     // Generate booking code
     const bookingCode = generateBookingCode();
+
+    // Calculate expiry time
+    const expiresAt = new Date(Date.now() + env.BOOKING_EXPIRY_MINUTES * 60 * 1000);
 
     // Create booking
     const { data: newBooking, error } = await supabase
@@ -204,6 +282,7 @@ export async function createBooking(req: Request, res: Response, next: NextFunct
         platform_fee: platformFee,
         total_amount: totalAmount,
         status: 'pending',
+        expires_at: expiresAt.toISOString(),
         location_name: input.location_name,
         location_address: input.location_address,
         special_notes: input.special_notes || null,
@@ -232,29 +311,93 @@ export async function getBookings(req: Request, res: Response, next: NextFunctio
     const userRole = req.user!.role;
     const supabase = getSupabase();
 
+    // Parse pagination params (used for admin; non-admin roles get all their own bookings)
+    const { page, limit } = parsePaginationParams(req.query);
+
     // Query based on role
     let query = supabase
       .from('bookings')
-      .select('*')
-      .order('created_at', { ascending: false });
+      .select('*', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false }); // deterministic tiebreaker
 
     if (userRole === 'user') {
       query = query.eq('user_id', userId);
     } else if (userRole === 'buddy') {
       query = query.eq('buddy_id', userId);
     }
-    // Admin sees all
+    // Admin sees all — apply pagination at the DB level
+    if (userRole === 'admin') {
+      const from = (page - 1) * limit;
+      const to = from + limit - 1;
+      query = query.range(from, to);
+    }
 
-    const { data, error } = await query;
+    const { data, error, count } = await query;
 
     if (error) {
       throw error;
     }
 
+    const bookings = data || [];
+    const total = count ?? bookings.length;
+
+    // Collect all unique buddy_ids from bookings
+    const buddyIds = [...new Set(bookings.map((b: any) => b.buddy_id))];
+
+    // Fetch user, profile, and buddy_profiles for all buddies in one batch
+    let buddyUsers: any[] = [];
+    let buddyProfiles: any[] = [];
+    let buddyBuddyProfiles: any[] = [];
+
+    if (buddyIds.length > 0) {
+      const [usersRes, profilesRes, buddyProfilesRes] = await Promise.all([
+        supabase
+          .from('users')
+          .select('id, full_name')
+          .in('id', buddyIds),
+        supabase
+          .from('profiles')
+          .select('user_id, photo_url, city, area')
+          .in('user_id', buddyIds),
+        supabase
+          .from('buddy_profiles')
+          .select('user_id, hourly_rate, rating, review_count, is_verified, badge_text, response_time')
+          .in('user_id', buddyIds),
+      ]);
+      buddyUsers = usersRes.data || [];
+      buddyProfiles = profilesRes.data || [];
+      buddyBuddyProfiles = buddyProfilesRes.data || [];
+    }
+
+    // Build a lookup map: buddy_id -> safe public buddy summary
+    const buddyMap: Record<string, any> = {};
+    for (const buddyId of buddyIds) {
+      const user = buddyUsers.find((u: any) => u.id === buddyId);
+      const profile = buddyProfiles.find((p: any) => p.user_id === buddyId);
+      const buddyProfile = buddyBuddyProfiles.find((bp: any) => bp.user_id === buddyId);
+      buddyMap[buddyId] = buildBuddySummary(user, profile, buddyProfile);
+    }
+
+    // Attach buddy summary to each booking (security: never expose private fields)
+    const enrichedBookings = bookings.map((booking: any) => ({
+      ...booking,
+      buddy: buddyMap[booking.buddy_id] || null,
+    }));
+
+    // Build pagination metadata
+    const totalPages = Math.ceil(total / limit);
+    const isAdmin = userRole === 'admin';
+
     res.status(200).json({
-      data: data || [],
+      data: enrichedBookings,
       meta: {
-        total: data?.length || 0,
+        total,
+        page: isAdmin ? page : 1,
+        limit: isAdmin ? limit : enrichedBookings.length,
+        totalPages: isAdmin ? totalPages : 1,
+        hasNextPage: isAdmin ? page < totalPages : false,
+        hasPreviousPage: isAdmin ? page > 1 : false,
       },
     });
   } catch (err) {
@@ -288,8 +431,25 @@ export async function getBookingById(req: Request, res: Response, next: NextFunc
       throw Forbidden('You do not have permission to view this booking.');
     }
 
+    // Fetch safe public buddy summary
+    const buddyId = booking.buddy_id;
+    const [userRes, profileRes, buddyProfileRes] = await Promise.all([
+      supabase.from('users').select('id, full_name').eq('id', buddyId).single(),
+      supabase.from('profiles').select('user_id, photo_url, city, area').eq('user_id', buddyId).single(),
+      supabase.from('buddy_profiles').select('user_id, hourly_rate, rating, review_count, is_verified, badge_text, response_time').eq('user_id', buddyId).single(),
+    ]);
+
+    const buddySummary = buildBuddySummary(
+      userRes.data,
+      profileRes.data || null,
+      buddyProfileRes.data || null,
+    );
+
     res.status(200).json({
-      data: booking,
+      data: {
+        ...booking,
+        buddy: buddySummary,
+      },
     });
   } catch (err) {
     next(err);

@@ -20,13 +20,20 @@ function getRazorpay(): any {
   return razorpayInstance;
 }
 
-const PLANS = {
-  MONTH_1: { id: 'MONTH_1', name: '1 Month', amount: 19900, period: '1 month' },
-  MONTH_6: { id: 'MONTH_6', name: '6 Months', amount: 99900, period: '6 months' },
-  YEAR_1: { id: 'YEAR_1', name: '1 Year', amount: 169900, period: '1 year' },
-  LIFETIME: { id: 'LIFETIME', name: 'Lifetime', amount: 499900, period: 'lifetime' },
-} as const;
+// ========== Pricing Plans ==========
+// NEW FINAL PRICING:
+// TRIAL_1D: ₹99 (9900 paise), 1 day, Razorpay required
+// WEEK_1: ₹499 (49900 paise), 7 days
+// MONTH_1: ₹1999 (199900 paise), 30 days
+//
+// OLD PLANS (FREE_TRIAL, MONTH_6, YEAR_1, LIFETIME) are NO LONGER PURCHASABLE
+// but historical records are preserved.
 
+const PLANS = {
+  TRIAL_1D: { id: 'TRIAL_1D', name: '1 Day Access', amount: 9900, period: '1 day' },
+  WEEK_1: { id: 'WEEK_1', name: '1 Week', amount: 49900, period: '7 days' },
+  MONTH_1: { id: 'MONTH_1', name: '1 Month', amount: 199900, period: '30 days' },
+} as const;
 
 // ========== Shared Membership Check Helper ==========
 
@@ -51,7 +58,7 @@ export async function checkUserMembership(supabase: any, userId: string): Promis
   const m = data[0];
   let isActive = false;
   if (!m.membership_expiry_date) {
-    isActive = true; // Lifetime
+    isActive = true; // Lifetime (historical records)
   } else {
     isActive = new Date(m.membership_expiry_date) > new Date();
   }
@@ -61,8 +68,10 @@ export async function checkUserMembership(supabase: any, userId: string): Promis
 
 type PlanId = keyof typeof PLANS;
 
+// ========== Validation Schemas ==========
+
 const createOrderSchema = z.object({
-  plan_id: z.enum(['MONTH_1', 'MONTH_6', 'YEAR_1', 'LIFETIME']),
+  plan_id: z.enum(['TRIAL_1D', 'WEEK_1', 'MONTH_1']),
 }).strict();
 
 const verifySchema = z.object({
@@ -79,13 +88,30 @@ function verifyRazorpaySignature(orderId: string, paymentId: string, signature: 
 
 function calculateExpiry(planId: PlanId, start: Date): Date | null {
   const plan = PLANS[planId];
-  if (plan.period === 'lifetime') return null;
+  if (!plan) return null;
   const d = new Date(start);
-  if (plan.period === '1 month') d.setMonth(d.getMonth() + 1);
-  else if (plan.period === '6 months') d.setMonth(d.getMonth() + 6);
-  else if (plan.period === '1 year') d.setFullYear(d.getFullYear() + 1);
+  if (plan.period === '1 day') d.setDate(d.getDate() + 1);
+  else if (plan.period === '7 days') d.setDate(d.getDate() + 7);
+  else if (plan.period === '30 days') d.setDate(d.getDate() + 30);
   return d;
 }
+
+/**
+ * Check if user has already used their one-time trial
+ */
+export async function hasUserUsedTrial(supabase: any, userId: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('memberships')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('plan_id', 'TRIAL_1D')
+    .limit(1);
+
+  if (error) return false;
+  return data && data.length > 0;
+}
+
+// ========== Controllers ==========
 
 export async function createMembershipOrder(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -93,6 +119,17 @@ export async function createMembershipOrder(req: Request, res: Response, next: N
     const userId = req.user!.id;
     const supabase = getSupabase();
 
+    // Enforce one paid ₹99 trial per user
+    // The TRIAL_1D plan (₹99, 1-day access) is a one-time offer per account.
+    // Check if user has already used their trial before creating a new order.
+    if (input.plan_id === 'TRIAL_1D') {
+      const hasUsed = await hasUserUsedTrial(supabase, userId);
+      if (hasUsed) {
+        throw Forbidden('You have already used your 1-day trial. Purchase a weekly (₹499) or monthly (₹1,999) plan to continue.');
+      }
+    }
+
+    // Server calculates amount from plan; client amount ignored
     const plan = PLANS[input.plan_id];
     const razorpay = getRazorpay();
     const order = await razorpay.orders.create({
@@ -166,6 +203,17 @@ export async function verifyMembershipPayment(req: Request, res: Response, next:
 
     if (uErr) throw uErr;
 
+    // If this was a TRIAL_1D payment, mark the user's trial as used
+    // This enforces the one-trial-per-user rule for future attempts
+    if (m.plan_id === 'TRIAL_1D') {
+      await supabase
+        .from('users')
+        .update({ free_trial_used: true })
+        .eq('id', userId)
+        .select()
+        .single();
+    }
+
     res.status(200).json({
       data: {
         membership_id: m.id,
@@ -199,7 +247,7 @@ export async function getMembershipStatus(req: Request, res: Response, next: Nex
     const m = list[0];
     let isActive = false;
     if (m.status === 'success') {
-      if (!m.membership_expiry_date) isActive = true;
+      if (!m.membership_expiry_date) isActive = true; // Lifetime historical
       else isActive = new Date(m.membership_expiry_date) > new Date();
     }
 

@@ -1,5 +1,10 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import confetti from 'canvas-confetti';
+import { authService } from '../services/auth';
+import { membershipService } from '../services/membership';
+import { notificationService } from '../services/notification';
+import { bookingService } from '../services/booking';
+import { userService } from '../services/user';
 import {
   User,
   Profile,
@@ -12,23 +17,13 @@ import {
   Review,
   Report,
   Verification,
+  UserVerificationStatus,
+  KycStatus,
+  VerificationStatus,
   Notification,
   UserRole,
 } from '../types/database';
-import {
-  ACTIVITIES,
-  INITIAL_USERS,
-  INITIAL_PROFILES,
-  INITIAL_BUDDY_PROFILES,
-  INITIAL_BOOKINGS,
-  INITIAL_REVIEWS,
-  INITIAL_MESSAGES,
-  INITIAL_NOTIFICATIONS,
-  INITIAL_PAYMENTS,
-  INITIAL_MEMBERSHIP,
-  INITIAL_VERIFICATIONS,
-  INITIAL_REPORTS,
-} from '../data/initialData';
+import { ACTIVITIES } from '../data/initialData';
 
 export interface FullBuddyData {
   user: User;
@@ -37,10 +32,15 @@ export interface FullBuddyData {
 }
 
 interface AppContextType {
-  currentUser: User;
-  setCurrentUser: React.Dispatch<React.SetStateAction<User>>;
-  userProfile: Profile;
-  setUserProfile: React.Dispatch<React.SetStateAction<Profile>>;
+  currentUser: User | null;
+  setCurrentUser: React.Dispatch<React.SetStateAction<User | null>>;
+  userProfile: Profile | null;
+  setUserProfile: React.Dispatch<React.SetStateAction<Profile | null>>;
+  isAuthenticated: boolean;
+  setIsAuthenticated: (auth: boolean) => void;
+  isInitializing: boolean;
+  authMode: 'register' | 'login' | 'admin';
+  setAuthMode: (mode: 'register' | 'login' | 'admin') => void;
   activeRole: UserRole;
   setActiveRole: (role: UserRole) => void;
   buddies: FullBuddyData[];
@@ -74,8 +74,23 @@ interface AppContextType {
   setActiveChatBooking: (booking: Booking | null) => void;
   activeChatBuddy: FullBuddyData | null;
   setActiveChatBuddy: (buddy: FullBuddyData | null) => void;
+  /** Real membership status fetched from backend API. Null = not loaded or no membership. */
+  apiMembership: {
+    id: string;
+    plan_id: string;
+    status: string;
+    amount: number;
+    currency: string;
+    is_active: boolean;
+    start_date: string | null;
+    expiry_date: string | null;
+  } | null;
+  fetchApiMembership: () => Promise<void>;
+  fetchVerificationStatus: () => Promise<void>;
   isRegisterModalOpen: boolean;
   setIsRegisterModalOpen: (open: boolean) => void;
+  pendingMembershipPlan: string | null;
+  setPendingMembershipPlan: (plan: string | null) => void;
   registerStep: number;
   setRegisterStep: (step: number) => void;
   isPaymentModalOpen: boolean;
@@ -96,6 +111,11 @@ interface AppContextType {
   setLatestConfirmedBooking: (booking: Booking | null) => void;
   isSafetyReportModalOpen: boolean;
   setIsSafetyReportModalOpen: (open: boolean) => void;
+  // Verification & KYC state
+  verificationStatus: UserVerificationStatus | null;
+  setVerificationStatus: (status: UserVerificationStatus | null) => void;
+  kycRecords: Verification[];
+  setKycRecords: (records: Verification[]) => void;
   // Actions
   toggleFavorite: (buddyId: string) => void;
   markNotificationRead: (id: string) => void;
@@ -120,10 +140,47 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState<User>(INITIAL_USERS[0]);
-  const [userProfile, setUserProfile] = useState<Profile>(INITIAL_PROFILES['usr-current']);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [userProfile, setUserProfile] = useState<Profile | null>(null);
   const [activeRole, setActiveRole] = useState<UserRole>('user');
-  
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isInitializing, setIsInitializing] = useState<boolean>(true);
+  const [authMode, setAuthMode] = useState<'register' | 'login' | 'admin'>('register');
+
+  // Initialize authentication state on app startup
+  useEffect(() => {
+    const initializeAuth = async () => {
+      setIsInitializing(true);
+      try {
+        // Check if access token exists
+        if (!authService.isAuthenticated()) {
+          // No token — ensure clean logged-out state
+          setCurrentUser(null);
+          setIsAuthenticated(false);
+          setActiveRole('user');
+          return;
+        }
+
+        // Token exists — validate it by calling /auth/me
+        const userData = await authService.getCurrentUser();
+        setCurrentUser(userData);
+        setIsAuthenticated(true);
+        setActiveRole(userData.role);
+      } catch (error) {
+        console.error('Auth initialization failed:', error);
+        // Invalid/expired token — clear everything
+        authService.clearTokens();
+        setCurrentUser(null);
+        setIsAuthenticated(false);
+        setActiveRole('user');
+      } finally {
+        setIsInitializing(false);
+      }
+    };
+
+    initializeAuth();
+  }, []);
+
   // App navigation state
   const [activeTab, setActiveTab] = useState<string>('home');
   const [legalPageSlug, setLegalPageSlug] = useState<string | null>(null);
@@ -140,6 +197,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [activeChatBuddy, setActiveChatBuddy] = useState<FullBuddyData | null>(null);
 
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState<boolean>(false);
+  const [pendingMembershipPlan, setPendingMembershipPlan] = useState<string | null>(null);
   const [registerStep, setRegisterStep] = useState<number>(1);
 
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState<boolean>(false);
@@ -157,26 +215,98 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [isSafetyReportModalOpen, setIsSafetyReportModalOpen] = useState<boolean>(false);
 
-  // Data Collections
-  const [bookings, setBookings] = useState<Booking[]>(INITIAL_BOOKINGS);
-  const [messages, setMessages] = useState<BookingMessage[]>(INITIAL_MESSAGES);
-  const [reviews, setReviews] = useState<Review[]>(INITIAL_REVIEWS);
-  const [notifications, setNotifications] = useState<Notification[]>(INITIAL_NOTIFICATIONS);
-  const [payments, setPayments] = useState<Payment[]>(INITIAL_PAYMENTS);
-  const [membership, setMembership] = useState<Membership>(INITIAL_MEMBERSHIP);
-  const [verifications, setVerifications] = useState<Verification[]>(INITIAL_VERIFICATIONS);
-  const [reports, setReports] = useState<Report[]>(INITIAL_REPORTS);
-  const [favorites, setFavorites] = useState<string[]>(['usr-b1', 'usr-b6']);
+  // Membership payment state
+  const [isProcessingPayment, setIsProcessingPayment] = useState<boolean>(false);
+  const [isPaymentComplete, setIsPaymentComplete] = useState<boolean>(false);
+  const [errorText, setErrorText] = useState<string>('');
+  const [payErrorId, setPayErrorId] = useState<string | null>(null);
 
-  // Assembled Buddy Data
-  const [buddies, setBuddies] = useState<FullBuddyData[]>(() => {
-    return Object.keys(INITIAL_BUDDY_PROFILES).map((userId) => {
-      const user = INITIAL_USERS.find((u) => u.id === userId) || INITIAL_USERS[1];
-      const profile = INITIAL_PROFILES[userId] || INITIAL_PROFILES['usr-b1'];
-      const buddyProfile = INITIAL_BUDDY_PROFILES[userId];
-      return { user, profile, buddyProfile };
-    });
-  });
+  // Verification & KYC state
+  const [verificationStatus, setVerificationStatus] = useState<UserVerificationStatus | null>(null);
+  const [kycRecords, setKycRecords] = useState<Verification[]>([]);
+
+  // Data Collections — all initialized empty; real data comes from API
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [messages, setMessages] = useState<BookingMessage[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [membership, setMembership] = useState<Membership | null>(null);
+  const [verifications, setVerifications] = useState<Verification[]>([]);
+  const [reports, setReports] = useState<Report[]>([]);
+  const [favorites, setFavorites] = useState<string[]>([]);
+
+  // Real membership status from backend API (shared across Header + Dashboard)
+  const [apiMembership, setApiMembership] = useState<{
+    id: string;
+    plan_id: string;
+    status: string;
+    amount: number;
+    currency: string;
+    is_active: boolean;
+    start_date: string | null;
+    expiry_date: string | null;
+  } | null>(null);
+
+  const fetchApiMembership = useCallback(async () => {
+    if (!isAuthenticated) {
+      setApiMembership(null);
+      return;
+    }
+    try {
+      const status = await membershipService.getMembershipStatus();
+      setApiMembership(status);
+    } catch (err) {
+      console.error('Failed to load membership status:', err);
+      setApiMembership(null);
+    }
+  }, [isAuthenticated]);
+
+  // Fetch real membership status when user logs in/out
+  useEffect(() => {
+    fetchApiMembership();
+  }, [fetchApiMembership]);
+
+  // Fetch verification status when user logs in/out
+  const fetchVerificationStatus = useCallback(async () => {
+    if (!isAuthenticated) {
+      setVerificationStatus(null);
+      return;
+    }
+    try {
+      const status = await userService.getVerificationStatus();
+      setVerificationStatus(status);
+    } catch (err) {
+      console.error('Failed to load verification status:', err);
+      setVerificationStatus(null);
+    }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    fetchVerificationStatus();
+  }, [fetchVerificationStatus]);
+
+  // Fetch notifications when user logs in/out
+  const fetchNotifications = useCallback(async () => {
+    if (!isAuthenticated) {
+      setNotifications([]);
+      return;
+    }
+    try {
+      const response = await notificationService.getNotifications();
+      setNotifications(response.data);
+    } catch (err) {
+      console.error('Failed to load notifications:', err);
+      setNotifications([]);
+    }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    fetchNotifications();
+  }, [fetchNotifications]);
+
+  // Assembled Buddy Data — populated from API, not mock data
+  const [buddies, setBuddies] = useState<FullBuddyData[]>([]);
 
   const triggerConfetti = () => {
     try {
@@ -197,125 +327,64 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
-  const markNotificationRead = (id: string) => {
+  const markNotificationRead = async (id: string) => {
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
     );
+    try {
+      await notificationService.markRead(id);
+    } catch (err) {
+      console.error('Failed to mark notification as read:', err);
+    }
   };
 
-  const markAllNotificationsRead = () => {
+  const markAllNotificationsRead = async () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+    try {
+      await notificationService.markAllRead();
+    } catch (err) {
+      console.error('Failed to mark all notifications as read:', err);
+    }
   };
 
+  // submitBooking is now handled by BookingModal via API — this function is kept
+  // for backward compatibility but should not be called directly.
   const submitBooking = (bookingData: Omit<Booking, 'id' | 'booking_code' | 'created_at'>): Booking => {
-    const randomCode = `YB-2026-${Math.floor(1000 + Math.random() * 9000)}`;
-    const newBooking: Booking = {
-      ...bookingData,
-      id: `bk-${Date.now()}`,
-      booking_code: randomCode,
-      created_at: new Date().toISOString(),
-    };
-
-    setBookings((prev) => [newBooking, ...prev]);
-
-    // Record payment
-    const newPayment: Payment = {
-      id: `pay-b-${Date.now()}`,
-      user_id: currentUser.id,
-      booking_id: newBooking.id,
-      payment_type: 'booking',
-      amount: newBooking.total_amount,
-      currency: 'INR',
-      payment_method: 'upi',
-      transaction_id: `UPI-TXN-2026-${Math.floor(100000 + Math.random() * 900000)}`,
-      status: 'success',
-      payment_gateway: 'Razorpay Sandbox',
-      created_at: new Date().toISOString(),
-    };
-    setPayments((prev) => [newPayment, ...prev]);
-
-    // Notification
-    const buddyObj = buddies.find((b) => b.user.id === newBooking.buddy_id);
-    const buddyName = buddyObj ? buddyObj.user.full_name : 'your buddy';
-    const notif: Notification = {
-      id: `notif-${Date.now()}`,
-      user_id: currentUser.id,
-      title: 'Booking Confirmed ✓',
-      message: `You're all set to meet ${buddyName} on ${newBooking.date} at ${newBooking.time}.`,
-      type: 'booking_accepted',
-      is_read: false,
-      created_at: new Date().toISOString(),
-    };
-    setNotifications((prev) => [notif, ...prev]);
-
-    // Auto-seed initial message in chat context
-    const welcomeMsg: BookingMessage = {
-      id: `msg-${Date.now()}`,
-      booking_id: newBooking.id,
-      sender_id: newBooking.buddy_id,
-      recipient_id: currentUser.id,
-      message: `Hi ${currentUser.full_name}! Thanks for booking. Looking forward to our meetup at ${newBooking.location_name}. Feel free to message here before we meet!`,
-      is_read: false,
-      created_at: new Date().toISOString(),
-    };
-    setMessages((prev) => [...prev, welcomeMsg]);
-
-    setLatestConfirmedBooking(newBooking);
-    setIsConfirmationModalOpen(true);
-    triggerConfetti();
-
-    return newBooking;
+    // This is a no-op placeholder. Real booking creation happens via bookingService.createBooking.
+    // The function signature is preserved to avoid breaking existing imports.
+    throw new Error('submitBooking must be called via bookingService.createBooking. Direct state manipulation is not allowed.');
   };
 
-  const cancelBooking = (bookingId: string) => {
-    setBookings((prev) =>
-      prev.map((b) => (b.id === bookingId ? { ...b, status: 'cancelled' } : b))
-    );
-    const notif: Notification = {
-      id: `notif-${Date.now()}`,
-      user_id: currentUser.id,
-      title: 'Booking Cancelled',
-      message: `Booking #${bookingId} has been cancelled. Full refund will be credited in 2-4 business hours as per policy.`,
-      type: 'account_warning',
-      is_read: false,
-      created_at: new Date().toISOString(),
-    };
-    setNotifications((prev) => [notif, ...prev]);
+  const cancelBooking = async (bookingId: string) => {
+    // Cancel via API — backend handles status update and notification creation
+    try {
+      await bookingService.cancelBooking(bookingId);
+      // Refresh bookings list
+      const response = await bookingService.getBookings();
+      setBookings(response.bookings);
+    } catch (err) {
+      console.error('Failed to cancel booking:', err);
+    }
   };
 
   const sendMessage = (bookingId: string, text: string) => {
     if (!text.trim()) return;
+    if (!currentUser) return;
+    
     const userMsg: BookingMessage = {
       id: `msg-${Date.now()}`,
       booking_id: bookingId,
       sender_id: currentUser.id,
-      recipient_id: activeChatBuddy ? activeChatBuddy.user.id : 'usr-b1',
+      recipient_id: activeChatBuddy ? activeChatBuddy.user.id : '',
       message: text.trim(),
       is_read: true,
       created_at: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, userMsg]);
 
-    // Simulated buddy friendly response after 1.2 seconds!
-    setTimeout(() => {
-      const responses = [
-        "Sounds wonderful! See you at the entrance of the venue.",
-        "Got it! Looking forward to it. I'll be in public seating area.",
-        "Awesome! Let me know if you need directions to the cafe.",
-        "Understood! Have a great day ahead and see you soon!",
-      ];
-      const randomReply = responses[Math.floor(Math.random() * responses.length)];
-      const replyMsg: BookingMessage = {
-        id: `msg-${Date.now() + 1}`,
-        booking_id: bookingId,
-        sender_id: activeChatBuddy ? activeChatBuddy.user.id : 'usr-b1',
-        recipient_id: currentUser.id,
-        message: randomReply,
-        is_read: false,
-        created_at: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, replyMsg]);
-    }, 1200);
+    // Note: Real chat message delivery would require a backend chat API.
+    // The previous simulated buddy response has been removed as it used
+    // hardcoded mock user IDs and fake responses.
   };
 
   const submitReview = (bookingId: string, rating: number, comment: string, tags: string[]) => {
@@ -339,6 +408,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setBookings((prev) =>
       prev.map((b) => (b.id === bookingId ? { ...b, has_review: true } : b))
     );
+
+    // Create notification for review submission
+    const buddyObj = buddies.find((b) => b.user.id === booking.buddy_id);
+    const buddyName = buddyObj ? buddyObj.user.full_name.split(' ')[0] : 'your buddy';
+    notificationService.createNotification({
+      type: 'review_received',
+      title: 'Review Submitted',
+      message: `Your ${rating}-star review for ${buddyName} has been posted. Thanks for supporting verified buddies!`,
+    }).catch((err) => console.error('Failed to persist review notification:', err));
 
     // Update buddy profile rating count
     setBuddies((prev) =>
@@ -365,51 +443,96 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const activateMembership = (method: 'upi' | 'credit_card' | 'debit_card' | 'net_banking') => {
-    const now = new Date().toISOString();
-    const newPayment: Payment = {
-      id: `pay-m-${Date.now()}`,
-      user_id: currentUser.id,
-      payment_type: 'membership',
-      amount: 499,
-      currency: 'INR',
-      payment_method: method,
-      transaction_id: `UPI-TXN-2026-${Math.floor(100000 + Math.random() * 900000)}`,
-      status: 'success',
-      payment_gateway: 'Razorpay Sandbox',
-      created_at: now,
-    };
-    setPayments((prev) => [newPayment, ...prev]);
+    // Use the real backend membership API — NOT local mock state.
+    // Default to TRIAL_1D (₹99) for registration flow; use pendingMembershipPlan if set.
+    const planId = pendingMembershipPlan ?? 'TRIAL_1D';
 
-    setMembership({
-      id: `mem-${Date.now()}`,
-      user_id: currentUser.id,
-      amount: 499,
-      status: 'active',
-      activated_at: now,
-      membership_type: 'one_time_lifetime',
-      payment_id: newPayment.id,
-    });
+    setIsProcessingPayment(true);
+    setErrorText('');
 
-    setCurrentUser((prev) => ({
-      ...prev,
-      is_membership_paid: true,
-      membership_paid_at: now,
-    }));
+    // Step 1: Create order via backend
+    membershipService.createOrder(planId)
+      .then((order) => {
+        // Reset pending plan after order creation
+        setPendingMembershipPlan(null);
+        // Step 2: Open Razorpay checkout
+        membershipService.openCheckout({
+          key: order.key_id,
+          amount: order.amount,
+          currency: order.currency,
+          order_id: order.order_id,
+          name: 'YorBuddy',
+          description: order.plan_name || 'Membership Payment',
+          prefill: {
+            name: currentUser?.full_name,
+            email: currentUser?.email,
+          },
+          handler: async (response: any) => {
+            // Step 3: Verify payment with backend
+            try {
+              const result = await membershipService.verifyPayment({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+              });
 
-    setNotifications((prev) => [
-      {
-        id: `notif-${Date.now()}`,
-        user_id: currentUser.id,
-        title: '🎉 Welcome to YorBuddy!',
-        message: 'Your ₹499 one-time membership is activated! You now have lifetime access to browse verified buddies and book companionship.',
-        type: 'payment_success',
-        is_read: false,
-        created_at: now,
-      },
-      ...prev,
-    ]);
+              // Step 4: Update local state from verified backend data
+              // NOTE: Backend returns status='success' (not 'active')
+              if (result.status === 'success' || result.status === 'active') {
+                setCurrentUser((prev) => ({
+                  ...prev!,
+                  is_membership_paid: true,
+                  membership_paid_at: new Date().toISOString(),
+                }));
+                setMembership({
+                  id: result.membership_id,
+                  user_id: currentUser!.id,
+                  amount: order.amount,
+                  status: 'active',
+                  activated_at: new Date().toISOString(),
+                  membership_type: 'one_time_lifetime',
+                  payment_id: response.razorpay_payment_id,
+                });
+                setIsPaymentComplete(true);
+                triggerConfetti();
+                notificationService.createNotification({
+                  type: 'payment_success',
+                  title: 'Membership Activated',
+                  message: `Your YorBuddy ${order.plan_name} membership of ₹${order.amount / 100} is now active.`,
+                }).catch((err) => console.error('Failed to persist membership notification:', err));
 
-    triggerConfetti();
+                // CRITICAL: Refresh global membership state so Header, Dashboard,
+                // and BuddySearch all unlock after verified payment
+                fetchApiMembership().catch((fetchErr) => {
+                  console.error('[activateMembership] Failed to refresh membership after payment:', fetchErr);
+                });
+              } else {
+                setErrorText('Payment verification failed. Please try again.');
+                setPayErrorId(currentUser!.id);
+              }
+            } catch (verifyErr: any) {
+              console.error('Membership verification failed:', verifyErr);
+              setErrorText('Payment verification failed. Please contact support.');
+              setPayErrorId(currentUser!.id);
+            } finally {
+              setIsProcessingPayment(false);
+            }
+          },
+          onDismiss: () => {
+            setIsProcessingPayment(false);
+            setErrorText('Payment cancelled. You can try again.');
+          },
+          onError: (err: any) => {
+            setIsProcessingPayment(false);
+            setErrorText('Payment failed: ' + (err.message || 'Unknown error'));
+          },
+        });
+      })
+      .catch((err: any) => {
+        setIsProcessingPayment(false);
+        const apiError = err.response?.data?.error;
+        setErrorText(apiError?.message || 'Failed to initiate membership payment. Please try again.');
+      });
   };
 
   const submitReport = (
@@ -431,111 +554,88 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setReports((prev) => [newReport, ...prev]);
   };
 
-  // Admin Actions
-  const adminApproveKyc = (userId: string) => {
-    setVerifications((prev) =>
-      prev.map((v) =>
-        v.user_id === userId
-          ? {
-              ...v,
-              status: 'verified',
-              reviewed_at: new Date().toISOString(),
-              reviewed_by: 'Super Admin',
-            }
-          : v
-      )
-    );
-    setBuddies((prev) =>
-      prev.map((b) =>
-        b.user.id === userId
-          ? {
-              ...b,
-              buddyProfile: {
-                ...b.buddyProfile,
-                is_verified: true,
-                verification_status: 'approved',
-              },
-            }
-          : b
-      )
-    );
+  // Admin Actions — all via API, no local state manipulation
+  const adminApproveKyc = async (kycId: string) => {
+    try {
+      await userService.approveKyc(kycId);
+      // Refresh KYC records
+      const res = await userService.getPendingKyc();
+      setKycRecords(res.data);
+    } catch (err) {
+      console.error('Failed to approve KYC:', err);
+      throw err;
+    }
   };
 
-  const adminRejectKyc = (userId: string, reason: string) => {
-    setVerifications((prev) =>
-      prev.map((v) =>
-        v.user_id === userId
-          ? {
-              ...v,
-              status: 'rejected',
-              rejection_reason: reason,
-              reviewed_at: new Date().toISOString(),
-              reviewed_by: 'Super Admin',
-            }
-          : v
-      )
-    );
+  const adminRejectKyc = async (kycId: string, reason: string) => {
+    try {
+      await userService.rejectKyc(kycId, reason);
+      // Refresh KYC records
+      const res = await userService.getPendingKyc();
+      setKycRecords(res.data);
+    } catch (err) {
+      console.error('Failed to reject KYC:', err);
+      throw err;
+    }
   };
 
-  const adminToggleUserStatus = (userId: string) => {
-    setBuddies((prev) =>
-      prev.map((b) =>
-        b.user.id === userId
-          ? { ...b, user: { ...b.user, is_active: !b.user.is_active } }
-          : b
-      )
-    );
+  const adminToggleUserStatus = async (userId: string) => {
+    // This should be implemented as a backend API endpoint
+    // For now, log that this needs backend implementation
+    console.warn('adminToggleUserStatus requires backend API endpoint for user status management');
+    throw new Error('User status toggle requires backend API. Not implemented in Phase 1.');
   };
 
-  const adminProcessRefund = (paymentId: string) => {
-    setPayments((prev) =>
-      prev.map((p) => (p.id === paymentId ? { ...p, status: 'refunded' } : p))
-    );
+  const adminProcessRefund = async (paymentId: string) => {
+    // This should be implemented as a backend API endpoint with Razorpay refund
+    // For now, log that this needs backend implementation
+    console.warn('adminProcessRefund requires backend API endpoint with Razorpay refund integration');
+    throw new Error('Refund processing requires backend API with Razorpay refund integration. Not implemented in Phase 1.');
   };
 
-  // Buddy Actions
-  const buddyAcceptBooking = (bookingId: string) => {
-    setBookings((prev) =>
-      prev.map((b) => (b.id === bookingId ? { ...b, status: 'confirmed' } : b))
-    );
+  // Buddy Actions — all via API, no local state manipulation
+  const buddyAcceptBooking = async (bookingId: string) => {
+    try {
+      await bookingService.updateBookingStatus(bookingId, 'confirmed');
+      const response = await bookingService.getBookings();
+      setBookings(response.bookings);
+      const booking = response.bookings.find((b) => b.id === bookingId);
+      if (booking) {
+        const buddyObj = buddies.find((b) => b.user.id === booking.buddy_id);
+        const buddyName = buddyObj ? buddyObj.user.full_name.split(' ')[0] : 'your buddy';
+        notificationService.createNotification({
+          type: 'booking_accepted',
+          title: 'Booking Accepted',
+          message: `${buddyName} has accepted your booking request!`,
+        }).catch((err) => console.error('Failed to persist booking notification:', err));
+      }
+    } catch (err) {
+      console.error('Failed to accept booking:', err);
+      throw err;
+    }
   };
 
-  const buddyRejectBooking = (bookingId: string) => {
-    setBookings((prev) =>
-      prev.map((b) => (b.id === bookingId ? { ...b, status: 'rejected' } : b))
-    );
+  const buddyRejectBooking = async (bookingId: string) => {
+    try {
+      await bookingService.updateBookingStatus(bookingId, 'rejected');
+      const response = await bookingService.getBookings();
+      setBookings(response.bookings);
+    } catch (err) {
+      console.error('Failed to reject booking:', err);
+      throw err;
+    }
   };
 
-  const buddyToggleOnline = () => {
-    setBuddies((prev) =>
-      prev.map((b) =>
-        b.user.id === 'usr-b1'
-          ? {
-              ...b,
-              buddyProfile: {
-                ...b.buddyProfile,
-                is_online: !b.buddyProfile.is_online,
-              },
-            }
-          : b
-      )
-    );
+  const buddyToggleOnline = async () => {
+    // Online status toggle requires backend API endpoint
+    console.warn('buddyToggleOnline requires backend API endpoint for buddy profile management');
+    throw new Error('Buddy online status toggle requires backend API. Not implemented in Phase 1.');
   };
 
-  const buddyUpdateRate = (newRate: number) => {
-    setBuddies((prev) =>
-      prev.map((b) =>
-        b.user.id === 'usr-b1'
-          ? {
-              ...b,
-              buddyProfile: {
-                ...b.buddyProfile,
-                hourly_rate: newRate,
-              },
-            }
-          : b
-      )
-    );
+  const buddyUpdateRate = async (newRate: number) => {
+    // Rate update requires backend API endpoint
+    console.warn('buddyUpdateRate requires backend API endpoint for buddy profile management');
+    throw new Error('Buddy rate update requires backend API. Not implemented in Phase 1.');
   };
 
   return (
@@ -545,6 +645,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCurrentUser,
         userProfile,
         setUserProfile,
+        isAuthenticated,
+        setIsAuthenticated,
+        isInitializing,
+        authMode,
+        setAuthMode,
         activeRole,
         setActiveRole,
         buddies,
@@ -580,6 +685,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setActiveChatBuddy,
         isRegisterModalOpen,
         setIsRegisterModalOpen,
+        pendingMembershipPlan,
+        setPendingMembershipPlan,
         registerStep,
         setRegisterStep,
         isPaymentModalOpen,
@@ -596,6 +703,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setLatestConfirmedBooking,
         isSafetyReportModalOpen,
         setIsSafetyReportModalOpen,
+        verificationStatus,
+        setVerificationStatus,
+        kycRecords,
+        setKycRecords,
+        fetchVerificationStatus,
         toggleFavorite,
         markNotificationRead,
         markAllNotificationsRead,
@@ -614,6 +726,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         buddyToggleOnline,
         buddyUpdateRate,
         triggerConfetti,
+        apiMembership,
+        fetchApiMembership,
+        isProcessingPayment,
+        isPaymentComplete,
+        membershipErrorText: errorText,
+        paymentErrorId: payErrorId,
       }}
     >
       {children}

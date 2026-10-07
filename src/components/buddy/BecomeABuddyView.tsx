@@ -7,7 +7,6 @@ import {
   Wallet,
   IndianRupee,
   Video,
-  FileCheck,
   UploadCloud,
   ArrowRight,
   ShieldAlert,
@@ -15,20 +14,19 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { membershipService } from '../../services/membership';
+import { userService } from '../../services/user';
 
 export const BecomeABuddyView: React.FC = () => {
   const { activities, setActiveTab, currentUser, setCurrentUser } = useApp();
 
   const [isApplying, setIsApplying] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
-  const [hourlyRate, setHourlyRate] = useState(650);
-  const [selectedActivities, setSelectedActivities] = useState<string[]>([
-    'act-1',
-    'act-2',
-    'act-5',
-  ]);
+  const [hourlyRate, setHourlyRate] = useState(400);
+  const [selectedActivities, setSelectedActivities] = useState<string[]>([]);
   const [applicationSubmitted, setApplicationSubmitted] = useState(false);
   const [membershipError, setMembershipError] = useState<string | null>(null);
+  const [kycDocument, setKycDocument] = useState<File | null>(null);
+  const [consentChecked, setConsentChecked] = useState(false);
 
   const toggleActivity = (id: string) => {
     setSelectedActivities((prev) =>
@@ -39,6 +37,18 @@ export const BecomeABuddyView: React.FC = () => {
   const handleApplySuccess = async (e: React.FormEvent) => {
     e.preventDefault();
     setMembershipError(null);
+
+    // Validate KYC document is uploaded by the applicant
+    if (!kycDocument) {
+      setMembershipError('Please upload your identity document (Aadhaar / PAN / Passport). Sample documents cannot be used.');
+      return;
+    }
+
+    // Validate consent is explicitly checked
+    if (!consentChecked) {
+      setMembershipError('You must agree to the Platonic Code of Conduct before submitting.');
+      return;
+    }
 
     // Check membership before submitting application
     try {
@@ -51,7 +61,18 @@ export const BecomeABuddyView: React.FC = () => {
       console.error('Membership check failed:', err);
     }
 
-    setApplicationSubmitted(true);
+    // Persist buddy profile to backend
+    try {
+      await userService.updateBuddyProfile({
+        hourly_rate: hourlyRate,
+        supported_activity_ids: selectedActivities,
+        safety_pledge_signed: consentChecked,
+      });
+      setApplicationSubmitted(true);
+    } catch (err: any) {
+      const apiError = err.response?.data?.error;
+      setMembershipError(apiError?.message || 'Failed to submit application. Please try again.');
+    }
   };
 
   return (
@@ -291,17 +312,32 @@ export const BecomeABuddyView: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Upload simulated document box */}
+                {/* Upload document box - applicant must provide their own document */}
                 <div className="p-4 rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50/50 space-y-2 text-center">
-                  <FileCheck className="w-8 h-8 text-blue-600 mx-auto" />
+                  <UploadCloud className="w-8 h-8 text-blue-600 mx-auto" />
                   <div className="text-xs">
                     <span className="font-bold text-slate-800 block">
                       Identity Document (Aadhaar / PAN / Passport)
                     </span>
-                    <span className="text-slate-500">
-                      Sample document attached: verified_kyc_aadhaar.pdf (2.4 MB)
-                    </span>
+                    {kycDocument ? (
+                      <span className="text-emerald-600">
+                        Uploaded: {kycDocument.name} ({(kycDocument.size / 1024).toFixed(1)} KB)
+                      </span>
+                    ) : (
+                      <span className="text-rose-500">
+                        No document uploaded — you must attach your own government ID
+                      </span>
+                    )}
                   </div>
+                  <input
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    onChange={(e) => setKycDocument(e.target.files?.[0] || null)}
+                    className="block mx-auto text-xs text-slate-600 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                  />
+                  <p className="text-[10px] text-slate-400">
+                    Sample/mock documents are never pre-attached. You must upload your own.
+                  </p>
                 </div>
 
                 {/* Strict Platonic Policy Acknowledgement */}
@@ -314,7 +350,7 @@ export const BecomeABuddyView: React.FC = () => {
                     YorBuddy is strictly for friendly and social companionship in public spaces. Prostitution, escorts, dating solicitations, or private home visits are zero-tolerance violations resulting in immediate ban and legal reporting.
                   </p>
                   <label className="flex items-center space-x-2 pt-1 cursor-pointer">
-                    <input type="checkbox" defaultChecked required className="rounded text-pink-600" />
+                    <input type="checkbox" checked={consentChecked} onChange={(e) => setConsentChecked(e.target.checked)} className="rounded text-pink-600" />
                     <span className="font-bold">
                       I understand and agree to adhere strictly to the Platonic Companion Guidelines.
                     </span>

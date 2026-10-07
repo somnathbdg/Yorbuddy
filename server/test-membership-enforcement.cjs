@@ -15,9 +15,29 @@ const { createClient } = require(path.join(process.cwd(), 'node_modules/@supabas
 
 const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
 
+// Test credentials come from the environment or are generated per run.
+// No password is hard-coded in this file.
+const { testPassword } = require('./test-utils/credentials.cjs');
+
 const results = [];
 function pass(name, detail) { results.push({ name, status: 'PASS', detail }); console.log('  PASS: ' + name + (detail ? ' - ' + detail : '')); }
 function fail(name, detail, error) { results.push({ name, status: 'FAIL', detail, error: error?.message || String(error) }); console.log('  FAIL: ' + name + (detail ? ' - ' + detail : '') + (error ? ' | ' + error.message : '')); }
+
+// Bookings this run creates, so they can be removed again at the end.
+const createdBookingIds = [];
+
+/**
+ * A random far-future (date, time) pair. Using a random slot keeps repeated
+ * runs from colliding with bookings left behind by an earlier run.
+ */
+function randomFutureSlot() {
+  const daysAhead = 60 + Math.floor(Math.random() * 300);
+  const d = new Date(Date.now() + daysAhead * 24 * 60 * 60 * 1000);
+  const date = d.toISOString().slice(0, 10);
+  const hour = 8 + Math.floor(Math.random() * 12); // 08:00-19:00
+  const time = String(hour).padStart(2, '0') + ':00:00';
+  return { date, time };
+}
 
 (async () => {
   // Test 1: User without membership cannot create booking
@@ -28,7 +48,7 @@ function fail(name, detail, error) { results.push({ name, status: 'FAIL', detail
     const regRes = await fetch('http://localhost:3001/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password: 'TestNoMem@2026!', full_name: 'No Mem', phone: '9' + Math.floor(100000000 + Math.random() * 899999999) }),
+      body: JSON.stringify({ email, password: testPassword, full_name: 'No Mem', phone: '9' + Math.floor(100000000 + Math.random() * 899999999) }),
     });
     const regData = await regRes.json();
     if (regData.error) throw new Error('Registration failed: ' + regData.error.message);
@@ -72,14 +92,18 @@ function fail(name, detail, error) { results.push({ name, status: 'FAIL', detail
     const { data: activity } = await supabase.from('activities').select('id').limit(1);
     if (!buddy || buddy.length === 0 || !activity || activity.length === 0) throw new Error('No buddy/activity data');
 
+    // Use a random far-future date/time so repeated runs never collide with a
+    // booking left behind by a previous run.
+    const { date: bookingDate, time: bookingTime } = randomFutureSlot();
+
     const bookingRes = await fetch('http://localhost:3001/api/bookings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
       body: JSON.stringify({
         buddy_id: buddy[0].user_id,
         activity_id: activity[0].id,
-        booking_date: '2026-12-31',
-        booking_time: '10:00:00',
+        booking_date: bookingDate,
+        booking_time: bookingTime,
         duration_hours: 2,
         location_name: 'Test Cafe',
         location_address: 'Pune',
@@ -87,6 +111,7 @@ function fail(name, detail, error) { results.push({ name, status: 'FAIL', detail
     });
     const bookingData = await bookingRes.json();
     if (bookingRes.status !== 201) throw new Error('Expected 201, got ' + bookingRes.status + ': ' + JSON.stringify(bookingData));
+    if (bookingData.data?.id) createdBookingIds.push(bookingData.data.id);
     pass('Booking allowed with active membership', 'code=' + bookingData.data.booking_code);
   } catch (err) { fail('User with active membership', null, err); }
 
@@ -98,7 +123,7 @@ function fail(name, detail, error) { results.push({ name, status: 'FAIL', detail
     const adminReg = await fetch('http://localhost:3001/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: adminEmail, password: 'TestAdmin@2026!', full_name: 'Admin', phone: '9' + Math.floor(100000000 + Math.random() * 899999999) }),
+      body: JSON.stringify({ email: adminEmail, password: testPassword, full_name: 'Admin', phone: '9' + Math.floor(100000000 + Math.random() * 899999999) }),
     });
     const adminData = await adminReg.json();
     if (adminData.error) throw new Error('Admin registration failed');
@@ -116,14 +141,17 @@ function fail(name, detail, error) { results.push({ name, status: 'FAIL', detail
     const { data: activity } = await supabase.from('activities').select('id').limit(1);
     if (!buddy || buddy.length === 0 || !activity || activity.length === 0) throw new Error('No buddy/activity data');
 
+    // A distinct random slot, separate from Test 2's, to avoid overlapping it.
+    const adminSlot = randomFutureSlot();
+
     const bookingRes = await fetch('http://localhost:3001/api/bookings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + adminToken },
       body: JSON.stringify({
         buddy_id: buddy[0].user_id,
         activity_id: activity[0].id,
-        booking_date: '2027-01-15',
-        booking_time: '16:00:00',
+        booking_date: adminSlot.date,
+        booking_time: adminSlot.time,
         duration_hours: 2,
         location_name: 'Admin Test',
         location_address: 'Pune',
@@ -131,16 +159,37 @@ function fail(name, detail, error) { results.push({ name, status: 'FAIL', detail
     });
     const bookingData = await bookingRes.json();
     if (bookingRes.status !== 201) throw new Error('Expected 201, got ' + bookingRes.status + ': ' + JSON.stringify(bookingData));
+    if (bookingData.data?.id) createdBookingIds.push(bookingData.data.id);
     pass('Admin booking allowed without membership', 'code=' + bookingData.data.booking_code);
   } catch (err) { fail('Admin bypass', null, err); }
 
   // Test 4: Buddy without membership is filtered from search
   console.log('\n=== Test 4: Buddy membership filter ===');
   try {
+    // /api/buddies requires authentication + membership + verification, so a
+    // token is required. Use an admin (admins bypass those gates) so this check
+    // does not depend on a particular member's state.
+    const { data: admins } = await supabase
+      .from('users')
+      .select('id, email, role')
+      .eq('role', 'admin')
+      .eq('is_active', true)
+      .limit(1);
+
+    if (!admins || admins.length === 0) throw new Error('No active admin available for authenticated search');
+
+    const searchToken = jwt.sign(
+      { userId: admins[0].id, email: admins[0].email, role: 'admin', type: 'access' },
+      env.JWT_ACCESS_SECRET,
+      { expiresIn: '15m', issuer: 'yorbuddy-api' }
+    );
+
     // Get all buddies from search API
-    const searchRes = await fetch('http://localhost:3001/api/buddies?per_page=50');
+    const searchRes = await fetch('http://localhost:3001/api/buddies?per_page=50', {
+      headers: { Authorization: 'Bearer ' + searchToken },
+    });
     const searchData = await searchRes.json();
-    if (searchRes.status !== 200) throw new Error('Search failed');
+    if (searchRes.status !== 200) throw new Error('Search failed with status ' + searchRes.status);
 
     // Check that all returned buddies have active membership
     let allHaveMembership = true;
@@ -182,5 +231,15 @@ function fail(name, detail, error) { results.push({ name, status: 'FAIL', detail
     console.log('\nFAILURES:');
     results.filter(r => r.status === 'FAIL').forEach(r => console.log('  [FAIL] ' + r.name + ': ' + r.error));
   }
+
+  // Cleanup: remove the bookings this run created so the database is left as
+  // it was found.
+  if (createdBookingIds.length > 0) {
+    const { error } = await supabase.from('bookings').delete().in('id', createdBookingIds);
+    console.log(error
+      ? `\n  Cleanup warning: could not remove ${createdBookingIds.length} test booking(s): ${error.message}`
+      : `\n  Cleanup: removed ${createdBookingIds.length} test booking(s)`);
+  }
+
   process.exit(failed > 0 ? 1 : 0);
 })();

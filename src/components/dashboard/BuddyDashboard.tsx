@@ -24,15 +24,15 @@ export const BuddyDashboard: React.FC = () => {
     updateBookingStatus,
   } = useApp();
 
-  // Pick primary buddy profile for demonstration (Neha Sharma)
-  const buddy = buddies[0];
+  // Pick primary buddy profile from API data
+  const buddy = buddies && buddies.length > 0 ? buddies[0] : null;
 
-  const [isOnline, setIsOnline] = useState(buddy.buddyProfile.is_online);
-  const [currentRate, setCurrentRate] = useState(buddy.buddyProfile.hourly_rate);
+  const [isOnline, setIsOnline] = useState(buddy ? buddy.buddyProfile.is_online : false);
+  const [currentRate, setCurrentRate] = useState(buddy ? buddy.buddyProfile.hourly_rate : 500);
   const [rateSaved, setRateSaved] = useState(false);
 
   // Buddy bookings
-  const buddyBookings = bookings.filter((b) => b.buddy_id === buddy.user.id);
+  const buddyBookings = buddy ? bookings.filter((b) => b.buddy_id === buddy.user.id) : [];
   const pendingRequests = buddyBookings.filter((b) => b.status === 'confirmed');
   const completedSessions = buddyBookings.filter((b) => b.status === 'completed');
 
@@ -46,7 +46,19 @@ export const BuddyDashboard: React.FC = () => {
     setTimeout(() => setRateSaved(false), 2000);
   };
 
-  const buddyReviews = reviews.filter((r) => r.buddy_id === buddy.user.id);
+  const buddyReviews = buddy ? reviews.filter((r) => r.buddy_id === buddy.user.id) : [];
+
+  if (!buddy) {
+    return (
+      <div className="bg-slate-50 min-h-screen py-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="bg-white rounded-3xl p-8 border border-slate-200 text-center">
+            <p className="text-slate-500">No buddy profile found.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-slate-50 min-h-screen py-10">

@@ -31,6 +31,29 @@ export interface Booking {
   meet_safety_acknowledged: boolean;
   has_review: boolean;
   created_at: string;
+  /** Safe public buddy summary — populated by the backend booking query. */
+  buddy?: {
+    id: string;
+    full_name: string;
+    photo_url?: string;
+    city?: string;
+    area?: string;
+    hourly_rate?: number;
+    rating?: number;
+    review_count?: number;
+    is_verified?: boolean;
+    badge_text?: string;
+    response_time?: string;
+  } | null;
+}
+
+export interface PaginationMeta {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
 }
 
 class BookingService {
@@ -39,11 +62,14 @@ class BookingService {
     return response.data.data;
   }
 
-  async getBookings(): Promise<{ bookings: Booking[]; total: number }> {
-    const response = await apiClient.get('/bookings');
+  async getBookings(page?: number, limit?: number): Promise<{ bookings: Booking[]; meta: PaginationMeta }> {
+    const params: Record<string, number> = {};
+    if (page !== undefined) params.page = page;
+    if (limit !== undefined) params.limit = limit;
+    const response = await apiClient.get('/bookings', { params });
     return {
       bookings: response.data.data,
-      total: response.data.meta?.total || 0,
+      meta: response.data.meta,
     };
   }
 

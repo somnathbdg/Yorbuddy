@@ -6,3 +6,11 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Local backups / database dumps may contain password hashes and other secrets.
+# Never commit these.
+backups/
+*.dump
+*.sql.gz
+
+supabase/.temp/

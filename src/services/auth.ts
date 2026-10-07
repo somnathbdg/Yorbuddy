@@ -21,6 +21,8 @@ export interface AuthResponse {
     email: string;
     full_name: string;
     phone: string | null;
+    dob?: string | null;
+    gender?: 'male' | 'female' | 'non-binary' | 'prefer-not-to-say' | null;
     role: 'user' | 'buddy' | 'admin';
     is_active: boolean;
     is_membership_paid: boolean;
@@ -58,6 +60,33 @@ class AuthService {
   async getCurrentUser() {
     const response = await apiClient.get('/auth/me');
     return response.data.data;
+  }
+
+  /**
+   * Request a password reset link.
+   * Always returns success message regardless of whether email exists.
+   */
+  async forgotPassword(email: string): Promise<{ message: string }> {
+    const response = await apiClient.post('/auth/forgot-password', { email });
+    return response.data;
+  }
+
+  /**
+   * Reset password using a valid reset token.
+   */
+  async resetPassword(token: string, newPassword: string): Promise<{ message: string }> {
+    const response = await apiClient.post('/auth/reset-password', {
+      token,
+      new_password: newPassword,
+    });
+    return response.data;
+  }
+
+  async exchangeGoogleCode(code: string): Promise<AuthResponse> {
+    const response = await apiClient.post('/auth/google/exchange', { code });
+    const data = response.data.data;
+    this.setTokens(data.accessToken, data.refreshToken);
+    return data;
   }
 
   setTokens(accessToken: string, refreshToken: string): void {

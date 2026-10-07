@@ -61,17 +61,15 @@ export const BookingModal: React.FC = () => {
     setErrorMessage('');
     setMembershipError(null);
 
-    // Check membership before creating booking
-    try {
-      const membershipStatus = await membershipService.getMembershipStatus();
-      if (!membershipStatus || !membershipStatus.is_active) {
-        setMembershipError('Active membership is required to book a Buddy. Please purchase a membership plan.');
-        setIsProcessing(false);
-        return;
-      }
-    } catch (err) {
-      // If membership check fails, still try to create booking (backend will enforce)
-      console.error('Membership check failed:', err);
+    // Check membership before creating booking.
+    // Membership-check failure is a hard block — fail closed.
+    // The backend enforces membership authorization on every booking request,
+    // but the frontend must also block here to provide clear user feedback.
+    const membershipStatus = await membershipService.getMembershipStatus();
+    if (!membershipStatus || !membershipStatus.is_active) {
+      setMembershipError('Active membership is required to book a Buddy. Please purchase a membership plan.');
+      setIsProcessing(false);
+      return;
     }
 
     try {
@@ -180,11 +178,14 @@ export const BookingModal: React.FC = () => {
               className="w-full p-3 rounded-2xl bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
             >
               {buddy.buddyProfile.supported_activity_ids.length > 0 ? (
-                buddy.buddyProfile.supported_activity_ids.map((actId, index) => (
-                  <option key={actId} value={actId}>
-                    Activity {index + 1}
-                  </option>
-                ))
+                buddy.buddyProfile.supported_activity_ids.map((actId) => {
+                  const activity = activities.find((a) => a.id === actId);
+                  return (
+                    <option key={actId} value={actId}>
+                      {activity ? activity.title : actId}
+                    </option>
+                  );
+                })
               ) : (
                 <option value="">No activities available</option>
               )}

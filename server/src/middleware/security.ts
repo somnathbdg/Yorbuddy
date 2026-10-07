@@ -32,11 +32,12 @@ export const compressionMiddleware = compression();
 
 /**
  * Rate limiter: general API rate limiting.
- * 100 requests per 15 minutes per IP.
+ * 100 requests per 15 minutes per IP in production.
+ * Relaxed for development/testing.
  */
 export const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100,
+  max: process.env.NODE_ENV === 'production' ? 100 : 2000,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -53,13 +54,49 @@ export const apiLimiter = rateLimit({
  */
 export const authLimiter = rateLimit({
   windowMs: 10 * 60 * 1000, // 10 minutes
-  max: 5,
+  max: process.env.NODE_ENV === 'production' ? 5 : 100, // Relaxed for development/testing
   standardHeaders: true,
   legacyHeaders: false,
   message: {
     error: {
       code: 'RATE_LIMIT_EXCEEDED',
       message: 'Too many attempts, please try again later.',
+    },
+  },
+});
+
+/**
+ * Rate limiter for verification/OTP endpoints.
+ * 5 requests per 10 minutes per IP in production.
+ * Prevents brute-force of 6-digit codes when an attacker has a valid JWT.
+ */
+export const verificationLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000, // 10 minutes
+  max: process.env.NODE_ENV === 'production' ? 5 : 100, // Relaxed for development/testing
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: {
+      code: 'RATE_LIMIT_EXCEEDED',
+      message: 'Too many verification attempts, please try again later.',
+    },
+  },
+});
+
+/**
+ * Rate limiter for Telegram webhook.
+ * 30 requests per minute per IP — enough for legitimate Telegram retries
+ * while providing basic abuse protection.
+ */
+export const telegramLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: process.env.NODE_ENV === 'production' ? 30 : 200, // Relaxed for development/testing
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: {
+      code: 'RATE_LIMIT_EXCEEDED',
+      message: 'Too many requests, please try again later.',
     },
   },
 });

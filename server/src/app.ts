@@ -4,12 +4,21 @@ import { helmetMiddleware, corsMiddleware, compressionMiddleware, apiLimiter, re
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { healthCheck, apiInfo } from './routes/health.js';
 import authRoutes from './routes/auth.js';
+import googleAuthRoutes from './routes/googleAuth.js';
 import userRoutes from './routes/users.js';
 import buddyRoutes from './routes/buddies.js';
 import bookingRoutes from './routes/bookings.js';
 import paymentRoutes from './routes/payments.js';
 import membershipRoutes from './routes/memberships.js';
 import { checkAuthSchema } from './middleware/auth.js';
+import verificationRoutes from './routes/verification.js';
+import adminRoutes from './routes/admin.js';
+import reportRoutes from './routes/reports.js';
+import notificationRoutes from './routes/notifications.js';
+import { registerCleanupJob } from './jobs/cleanupPendingBookings.js';
+import { registerFacebookCronJob } from './jobs/facebookAutomationJob.js';
+import facebookRoutes from './routes/facebook.js';
+import { telegramWebhookRouter, telegramAdminRouter } from './routes/telegram.js';
 
 /**
  * Create and configure the Express application.
@@ -51,6 +60,9 @@ export function createApp(): Express {
   // Authentication routes
   app.use('/api/auth', authRoutes);
 
+  // Google OAuth routes
+  app.use('/api/auth/google', googleAuthRoutes);
+
   // User profile routes
   app.use('/api/users', userRoutes);
 
@@ -65,6 +77,33 @@ export function createApp(): Express {
 
   // Membership routes
   app.use('/api/memberships', membershipRoutes);
+
+  // Verification & KYC routes (user's own data)
+  app.use('/api/verification', verificationRoutes);
+  app.use('/api/kyc', verificationRoutes);
+
+  // Admin routes: dashboard stats, verified buddies, and KYC review.
+  // Kept separate from verificationRoutes so the KYC /:id route is scoped to
+  // /api/admin/kyc/* and cannot shadow unrelated /api/admin/* paths.
+  app.use('/api/admin', adminRoutes);
+
+  // Safety report routes
+  app.use('/api/reports', reportRoutes);
+
+  // Notification routes
+  app.use('/api/notifications', notificationRoutes);
+
+  // Facebook automation routes (admin only)
+  app.use('/api/facebook', facebookRoutes);
+
+  // Telegram webhook and bot management.
+  // Split by trust level:
+  //   - /api/telegram/webhook       -> PUBLIC, validated by the Telegram
+  //     secret-token header (TELEGRAM_WEBHOOK_SECRET). Telegram cannot present
+  //     a JWT, so this single inbound path stays outside the JWT gate.
+  //   - /api/telegram/* (management)-> ADMIN ONLY, via authenticate + requireRole.
+  app.use('/api/telegram', telegramWebhookRouter);
+  app.use('/api/telegram', telegramAdminRouter);
 
   // API routes will be added here in subsequent steps
   // app.use('/api/payments', paymentRoutes);
@@ -91,6 +130,23 @@ export function startServer(): ReturnType<Express['listen']> {
 
   // Check auth schema on startup
   checkAuthSchema();
+
+  // Register background cleanup job for expired bookings
+  registerCleanupJob();
+
+  // Register daily Facebook automation cron job
+  registerFacebookCronJob();
+
+  // Start Telegram long-polling to receive inline keyboard callbacks
+  if (process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID) {
+    import('./services/telegramPoller.js').then(({ startTelegramPolling }) => {
+      startTelegramPolling(3000);
+    }).catch((err) => {
+      console.error('[TELEGRAM] Failed to start polling:', err.message);
+    });
+  } else {
+    console.log('[TELEGRAM] Polling not started: missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID');
+  }
 
   const server = app.listen(env.PORT, () => {
     console.log('');

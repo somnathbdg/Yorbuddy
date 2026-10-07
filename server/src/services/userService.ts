@@ -286,15 +286,19 @@ export async function updateBuddyProfile(req: Request, res: Response, next: Next
     const supabase = getSupabase();
     const input = updateBuddyProfileSchema.parse(req.body);
 
-    // Verify user has buddy role
-    const { data: userRow } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', userId)
+    // Ensure profiles row exists (required for Find a Buddy display)
+    const { data: existingProfile } = await supabase
+      .from('profiles')
+      .select('user_id')
+      .eq('user_id', userId)
       .single();
 
-    if (!userRow || (userRow.role !== 'buddy' && userRow.role !== 'admin')) {
-      throw BadRequest('User does not have a buddy profile. Apply to become a buddy first.');
+    if (!existingProfile) {
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert({ user_id: userId });
+
+      if (profileError) throw profileError;
     }
 
     // Check if buddy profile exists
@@ -319,6 +323,22 @@ export async function updateBuddyProfile(req: Request, res: Response, next: Next
         .eq('user_id', userId);
 
       if (updateError) throw updateError;
+    }
+
+    // Reverse sync: if user has approved KYC, sync verification status
+    // This handles the case where KYC was approved BEFORE buddy profile creation
+    const { data: approvedKycRows } = await supabase
+      .from('verifications')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('status', 'approved')
+      .limit(1);
+
+    if (approvedKycRows && approvedKycRows.length > 0) {
+      await supabase
+        .from('buddy_profiles')
+        .update({ verification_status: 'approved', is_verified: true })
+        .eq('user_id', userId);
     }
 
     // Return updated buddy profile

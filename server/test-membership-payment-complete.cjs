@@ -36,68 +36,59 @@ async function api(method, reqPath, body, token) {
     { expiresIn: '15m', issuer: 'yorbuddy-api' }
   );
 
-  // Test 1: MONTH_1 correct amount (19900 paise)
+  // Test 1: MONTH_1 correct amount (199900 paise = ₹1999)
   console.log('\n=== Test 1: MONTH_1 amount ===');
   try {
     const res = await api('POST', '/api/memberships/create-order', { plan_id: 'MONTH_1' }, token);
     if (res.status !== 201) throw new Error('Expected 201, got ' + res.status);
-    if (res.data.data.amount !== 19900) throw new Error('Expected 19900, got ' + res.data.data.amount);
-    pass('MONTH_1 = 19900 paise', 'Rs 199.00');
+    if (res.data.data.amount !== 199900) throw new Error('Expected 199900, got ' + res.data.data.amount);
+    pass('MONTH_1 = 199900 paise', 'Rs 1999.00');
   } catch (err) { fail('Test 1', null, err); }
 
-  // Test 2: MONTH_6 correct amount (99900 paise)
-  console.log('\n=== Test 2: MONTH_6 amount ===');
+  // Test 2: WEEK_1 correct amount (49900 paise = ₹499)
+  console.log('\n=== Test 2: WEEK_1 amount ===');
   try {
-    const res = await api('POST', '/api/memberships/create-order', { plan_id: 'MONTH_6' }, token);
+    const res = await api('POST', '/api/memberships/create-order', { plan_id: 'WEEK_1' }, token);
     if (res.status !== 201) throw new Error('Expected 201, got ' + res.status);
-    if (res.data.data.amount !== 99900) throw new Error('Expected 99900, got ' + res.data.data.amount);
-    pass('MONTH_6 = 99900 paise', 'Rs 999.00');
+    if (res.data.data.amount !== 49900) throw new Error('Expected 49900, got ' + res.data.data.amount);
+    pass('WEEK_1 = 49900 paise', 'Rs 499.00');
   } catch (err) { fail('Test 2', null, err); }
 
-  // Test 3: YEAR_1 correct amount (169900 paise)
-  console.log('\n=== Test 3: YEAR_1 amount ===');
+  // Test 3: TRIAL_1D correct amount (9900 paise = ₹99)
+  console.log('\n=== Test 3: TRIAL_1D amount ===');
   try {
-    const res = await api('POST', '/api/memberships/create-order', { plan_id: 'YEAR_1' }, token);
+    const res = await api('POST', '/api/memberships/create-order', { plan_id: 'TRIAL_1D' }, token);
     if (res.status !== 201) throw new Error('Expected 201, got ' + res.status);
-    if (res.data.data.amount !== 169900) throw new Error('Expected 169900, got ' + res.data.data.amount);
-    pass('YEAR_1 = 169900 paise', 'Rs 1,699.00');
+    if (res.data.data.amount !== 9900) throw new Error('Expected 9900, got ' + res.data.data.amount);
+    pass('TRIAL_1D = 9900 paise', 'Rs 99.00');
   } catch (err) { fail('Test 3', null, err); }
 
-  // Test 4: LIFETIME correct amount (499900 paise)
-  console.log('\n=== Test 4: LIFETIME amount ===');
-  try {
-    const res = await api('POST', '/api/memberships/create-order', { plan_id: 'LIFETIME' }, token);
-    if (res.status !== 201) throw new Error('Expected 201, got ' + res.status);
-    if (res.data.data.amount !== 499900) throw new Error('Expected 499900, got ' + res.data.data.amount);
-    pass('LIFETIME = 499900 paise', 'Rs 4,999.00');
-  } catch (err) { fail('Test 4', null, err); }
-
-  // Test 5: Invalid plan rejected
-  console.log('\n=== Test 5: Invalid plan ===');
+  // Test 4: Invalid plan rejected
+  console.log('\n=== Test 4: Invalid plan ===');
   try {
     const res = await api('POST', '/api/memberships/create-order', { plan_id: 'INVALID' }, token);
     if (res.status !== 400) throw new Error('Expected 400, got ' + res.status);
     pass('Invalid plan rejected', 'status=400');
-  } catch (err) { fail('Test 5', null, err); }
+  } catch (err) { fail('Test 4', null, err); }
 
-  // Test 6: Client amount override rejected
-  console.log('\n=== Test 6: Client amount override ===');
+  // Test 5: Client amount override rejected
+  console.log('\n=== Test 5: Client amount override ===');
   try {
     const res = await api('POST', '/api/memberships/create-order', { plan_id: 'MONTH_1', amount: 1 }, token);
     if (res.status !== 400) throw new Error('Expected 400, got ' + res.status);
     pass('Client amount override rejected', 'status=400');
-  } catch (err) { fail('Test 6', null, err); }
+  } catch (err) { fail('Test 5', null, err); }
 
-  // Test 7: Unauthorized request rejected
-  console.log('\n=== Test 7: Unauthorized ===');
+  // Test 6: Unauthorized request rejected
+  console.log('\n=== Test 6: Unauthorized ===');
   try {
     const res = await api('POST', '/api/memberships/create-order', { plan_id: 'MONTH_1' });
     if (res.status !== 401) throw new Error('Expected 401, got ' + res.status);
     pass('Unauthorized rejected', 'status=401');
-  } catch (err) { fail('Test 7', null, err); }
+  } catch (err) { fail('Test 6', null, err); }
 
-  // Test 8: Invalid Razorpay signature rejected
-  console.log('\n=== Test 8: Invalid signature ===');
+  // Test 7: Invalid Razorpay signature rejected
+  console.log('\n=== Test 7: Invalid signature ===');
   try {
     const orderRes = await api('POST', '/api/memberships/create-order', { plan_id: 'MONTH_1' }, token);
     const orderId = orderRes.data.data.order_id;
@@ -108,14 +99,14 @@ async function api(method, reqPath, body, token) {
     }, token);
     if (verifyRes.status !== 400) throw new Error('Expected 400, got ' + verifyRes.status);
     pass('Invalid signature rejected', 'status=400');
-  } catch (err) { fail('Test 8', null, err); }
+  } catch (err) { fail('Test 7', null, err); }
 
-  // Test 9: Successful verification activates MONTH_1
-  console.log('\n=== Test 9: Successful verification MONTH_1 ===');
+  // Test 8: Successful verification activates MONTH_1
+  console.log('\n=== Test 8: Successful verification MONTH_1 ===');
   try {
     const orderRes = await api('POST', '/api/memberships/create-order', { plan_id: 'MONTH_1' }, token);
     const orderId = orderRes.data.data.order_id;
-    const paymentId = 'pay_test9_' + Date.now();
+    const paymentId = 'pay_test8_' + Date.now();
     const body = orderId + '|' + paymentId;
     const sig = crypto.createHmac('sha256', env.RAZORPAY_KEY_SECRET).update(body).digest('hex');
 
@@ -131,12 +122,34 @@ async function api(method, reqPath, body, token) {
     if (!m.membership_start_date) throw new Error('Start date not set');
     if (!m.membership_expiry_date) throw new Error('Expiry date not set for MONTH_1');
     pass('MONTH_1 activated', 'start=' + m.membership_start_date + ', expiry=' + m.membership_expiry_date);
+  } catch (err) { fail('Test 8', null, err); }
+
+  // Test 9: Successful verification activates WEEK_1
+  console.log('\n=== Test 9: Successful verification WEEK_1 ===');
+  try {
+    const orderRes = await api('POST', '/api/memberships/create-order', { plan_id: 'WEEK_1' }, token);
+    const orderId = orderRes.data.data.order_id;
+    const paymentId = 'pay_test9_' + Date.now();
+    const body = orderId + '|' + paymentId;
+    const sig = crypto.createHmac('sha256', env.RAZORPAY_KEY_SECRET).update(body).digest('hex');
+
+    const verifyRes = await api('POST', '/api/memberships/verify', {
+      razorpay_order_id: orderId,
+      razorpay_payment_id: paymentId,
+      razorpay_signature: sig,
+    }, token);
+    if (verifyRes.status !== 200) throw new Error('Verify failed: ' + JSON.stringify(verifyRes.data));
+
+    const { data: m } = await supabase.from('memberships').select('*').eq('razorpay_order_id', orderId).single();
+    if (m.status !== 'success') throw new Error('Expected success, got ' + m.status);
+    if (!m.membership_expiry_date) throw new Error('Expiry date not set for WEEK_1');
+    pass('WEEK_1 activated', 'expiry=' + m.membership_expiry_date);
   } catch (err) { fail('Test 9', null, err); }
 
-  // Test 10: Successful verification activates MONTH_6
-  console.log('\n=== Test 10: Successful verification MONTH_6 ===');
+  // Test 10: Successful verification activates TRIAL_1D (1 day)
+  console.log('\n=== Test 10: Successful verification TRIAL_1D ===');
   try {
-    const orderRes = await api('POST', '/api/memberships/create-order', { plan_id: 'MONTH_6' }, token);
+    const orderRes = await api('POST', '/api/memberships/create-order', { plan_id: 'TRIAL_1D' }, token);
     const orderId = orderRes.data.data.order_id;
     const paymentId = 'pay_test10_' + Date.now();
     const body = orderId + '|' + paymentId;
@@ -151,69 +164,16 @@ async function api(method, reqPath, body, token) {
 
     const { data: m } = await supabase.from('memberships').select('*').eq('razorpay_order_id', orderId).single();
     if (m.status !== 'success') throw new Error('Expected success, got ' + m.status);
-    if (!m.membership_expiry_date) throw new Error('Expiry date not set for MONTH_6');
-    pass('MONTH_6 activated', 'expiry=' + m.membership_expiry_date);
+    if (!m.membership_expiry_date) throw new Error('Expiry date not set for TRIAL_1D');
+    pass('TRIAL_1D activated', 'expiry=' + m.membership_expiry_date);
   } catch (err) { fail('Test 10', null, err); }
 
-  // Test 11: Successful verification activates YEAR_1
-  console.log('\n=== Test 11: Successful verification YEAR_1 ===');
-  try {
-    const orderRes = await api('POST', '/api/memberships/create-order', { plan_id: 'YEAR_1' }, token);
-    const orderId = orderRes.data.data.order_id;
-    const paymentId = 'pay_test11_' + Date.now();
-    const body = orderId + '|' + paymentId;
-    const sig = crypto.createHmac('sha256', env.RAZORPAY_KEY_SECRET).update(body).digest('hex');
-
-    const verifyRes = await api('POST', '/api/memberships/verify', {
-      razorpay_order_id: orderId,
-      razorpay_payment_id: paymentId,
-      razorpay_signature: sig,
-    }, token);
-    if (verifyRes.status !== 200) throw new Error('Verify failed: ' + JSON.stringify(verifyRes.data));
-
-    const { data: m } = await supabase.from('memberships').select('*').eq('razorpay_order_id', orderId).single();
-    if (m.status !== 'success') throw new Error('Expected success, got ' + m.status);
-    if (!m.membership_expiry_date) throw new Error('Expiry date not set for YEAR_1');
-    pass('YEAR_1 activated', 'expiry=' + m.membership_expiry_date);
-  } catch (err) { fail('Test 11', null, err); }
-
-  // Test 12: Successful verification activates LIFETIME
-  console.log('\n=== Test 12: Successful verification LIFETIME ===');
-  try {
-    const orderRes = await api('POST', '/api/memberships/create-order', { plan_id: 'LIFETIME' }, token);
-    const orderId = orderRes.data.data.order_id;
-    const paymentId = 'pay_test12_' + Date.now();
-    const body = orderId + '|' + paymentId;
-    const sig = crypto.createHmac('sha256', env.RAZORPAY_KEY_SECRET).update(body).digest('hex');
-
-    const verifyRes = await api('POST', '/api/memberships/verify', {
-      razorpay_order_id: orderId,
-      razorpay_payment_id: paymentId,
-      razorpay_signature: sig,
-    }, token);
-    if (verifyRes.status !== 200) throw new Error('Verify failed: ' + JSON.stringify(verifyRes.data));
-
-    const { data: m } = await supabase.from('memberships').select('*').eq('razorpay_order_id', orderId).single();
-    if (m.status !== 'success') throw new Error('Expected success, got ' + m.status);
-    if (m.membership_expiry_date !== null) throw new Error('Expected null expiry for LIFETIME, got ' + m.membership_expiry_date);
-    pass('LIFETIME activated', 'expiry=null (never expires)');
-  } catch (err) { fail('Test 12', null, err); }
-
-  // Test 13: Lifetime expiry_date is NULL
-  console.log('\n=== Test 13: Lifetime expiry is NULL ===');
-  try {
-    const { data: m } = await supabase.from('memberships').select('*').eq('plan_id', 'LIFETIME').eq('status', 'success').order('created_at', { ascending: false }).limit(1).single();
-    if (!m) throw new Error('No LIFETIME membership found');
-    if (m.membership_expiry_date !== null) throw new Error('Expected null, got ' + m.membership_expiry_date);
-    pass('Lifetime expiry_date is NULL', 'correct');
-  } catch (err) { fail('Test 13', null, err); }
-
-  // Test 14: Duplicate verification is idempotent
-  console.log('\n=== Test 14: Duplicate verification ===');
+  // Test 11: Duplicate verification is idempotent
+  console.log('\n=== Test 11: Duplicate verification ===');
   try {
     const orderRes = await api('POST', '/api/memberships/create-order', { plan_id: 'MONTH_1' }, token);
     const orderId = orderRes.data.data.order_id;
-    const paymentId = 'pay_test14_' + Date.now();
+    const paymentId = 'pay_test11_' + Date.now();
     const body = orderId + '|' + paymentId;
     const sig = crypto.createHmac('sha256', env.RAZORPAY_KEY_SECRET).update(body).digest('hex');
 
@@ -227,10 +187,10 @@ async function api(method, reqPath, body, token) {
     }, token);
     if (v2.status !== 200) throw new Error('Duplicate verify failed: ' + v2.status);
     pass('Duplicate verification idempotent', 'status=200');
-  } catch (err) { fail('Test 14', null, err); }
+  } catch (err) { fail('Test 11', null, err); }
 
-  // Test 15: Existing booking flow unaffected
-  console.log('\n=== Test 15: Existing booking flow ===');
+  // Test 12: Existing booking flow unaffected
+  console.log('\n=== Test 12: Existing booking flow ===');
   try {
     const { data: buddy } = await supabase.from('buddy_profiles').select('user_id').limit(1);
     const { data: activity } = await supabase.from('activities').select('id').limit(1);
@@ -251,7 +211,7 @@ async function api(method, reqPath, body, token) {
     const paymentRes = await api('POST', '/api/payments/create-order', { booking_id: bookingData.id }, token);
     if (paymentRes.status !== 201) throw new Error('Payment failed: ' + JSON.stringify(paymentRes.data));
     pass('Booking + payment flow works', 'booking=' + bookingData.booking_code);
-  } catch (err) { fail('Test 15', null, err); }
+  } catch (err) { fail('Test 12', null, err); }
 
   // Summary
   console.log('\n=== MEMBERSHIP PAYMENT TEST SUMMARY ===');

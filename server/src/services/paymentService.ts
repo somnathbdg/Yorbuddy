@@ -96,6 +96,21 @@ export async function createOrder(req: Request, res: Response, next: NextFunctio
       throw BadRequest('Cannot pay for a cancelled or rejected booking.');
     }
 
+    // Verify booking is not expired
+    if (booking.status === 'expired') {
+      throw BadRequest('This booking has expired. Please create a new booking.');
+    }
+
+    // Check if pending booking has passed its expires_at timestamp
+    if (booking.status === 'pending' && booking.expires_at && new Date(booking.expires_at) < new Date()) {
+      // Auto-expire the booking
+      await supabase
+        .from('bookings')
+        .update({ status: 'expired' })
+        .eq('id', booking.id);
+      throw BadRequest('This booking has expired. Please create a new booking.');
+    }
+
     // Check if payment already exists and is successful
     const { data: existingPayment } = await supabase
       .from('payments')
@@ -106,6 +121,31 @@ export async function createOrder(req: Request, res: Response, next: NextFunctio
 
     if (existingPayment) {
       throw Conflict('Payment already completed for this booking.');
+    }
+
+    // Check for any pending payment (idempotency - reuse existing order)
+    const { data: pendingPayment } = await supabase
+      .from('payments')
+      .select('*')
+      .eq('booking_id', input.booking_id)
+      .eq('status', 'created')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (pendingPayment) {
+      // Return existing pending order instead of creating a new one
+      res.status(200).json({
+        data: {
+          order_id: pendingPayment.razorpay_order_id,
+          amount: booking.total_amount * 100,
+          currency: 'INR',
+          key_id: env.RAZORPAY_KEY_ID,
+          booking_code: booking.booking_code,
+        },
+        message: 'Existing order reused.',
+      });
+      return;
     }
 
     // Amount is in paise (Razorpay uses smallest currency unit)
@@ -161,12 +201,6 @@ export async function verifyPayment(req: Request, res: Response, next: NextFunct
     const userId = req.user!.id;
     const supabase = getSupabase();
 
-    console.log('[VERIFY DEBUG] verifyPayment called');
-    console.log('[VERIFY DEBUG] order_id:', input.razorpay_order_id);
-    console.log('[VERIFY DEBUG] payment_id:', input.razorpay_payment_id);
-    console.log('[VERIFY DEBUG] signature present:', !!input.razorpay_signature);
-    console.log('[VERIFY DEBUG] user_id:', userId);
-
     const { data: payment, error: paymentError } = await supabase
       .from('payments')
       .select('*')
@@ -174,25 +208,38 @@ export async function verifyPayment(req: Request, res: Response, next: NextFunct
       .single();
 
     if (paymentError || !payment) {
-      console.log('[VERIFY DEBUG] Payment record not found:', paymentError?.message);
       throw NotFound('Payment record not found.');
     }
 
-    console.log('[VERIFY DEBUG] Payment record found, status:', payment.status);
-    console.log('[VERIFY DEBUG] Payment user_id:', payment.user_id);
-
     if (payment.user_id !== userId) {
-      console.log('[VERIFY DEBUG] User mismatch! payment.user_id:', payment.user_id, 'req user:', userId);
       throw Forbidden('You do not have permission to verify this payment.');
     }
 
     if (payment.status === 'success') {
-      console.log('[VERIFY DEBUG] Payment already verified');
       res.status(200).json({
         data: { payment_id: payment.razorpay_payment_id, status: 'success' },
         message: 'Payment already verified.',
       });
       return;
+    }
+
+    // Fetch the booking to check if it's expired before confirming
+    const { data: booking, error: bookingFetchError } = await supabase
+      .from('bookings')
+      .select('id, status')
+      .eq('id', payment.booking_id)
+      .single();
+
+    if (bookingFetchError || !booking) {
+      throw NotFound('Associated booking not found.');
+    }
+
+    if (booking.status === 'expired') {
+      throw BadRequest('Cannot confirm payment for an expired booking.');
+    }
+
+    if (booking.status === 'cancelled' || booking.status === 'rejected') {
+      throw BadRequest('Cannot confirm payment for a cancelled or rejected booking.');
     }
 
     const isValid = verifyRazorpaySignature(
@@ -201,10 +248,7 @@ export async function verifyPayment(req: Request, res: Response, next: NextFunct
       input.razorpay_signature
     );
 
-    console.log('[VERIFY DEBUG] Signature valid:', isValid);
-
     if (!isValid) {
-      console.log('[VERIFY DEBUG] Invalid signature - marking payment as failed');
       await supabase
         .from('payments')
         .update({ status: 'failed' })
@@ -224,17 +268,14 @@ export async function verifyPayment(req: Request, res: Response, next: NextFunct
       .eq('id', payment.id);
 
     if (updateError) {
-      console.log('[VERIFY DEBUG] Payment update error:', updateError.message);
       throw updateError;
     }
 
-    console.log('[VERIFY DEBUG] Payment updated to success, updating booking');
     await supabase
       .from('bookings')
       .update({ status: 'confirmed' })
       .eq('id', payment.booking_id);
 
-    console.log('[VERIFY DEBUG] Booking updated to confirmed');
     res.status(200).json({
       data: {
         payment_id: input.razorpay_payment_id,
@@ -244,8 +285,6 @@ export async function verifyPayment(req: Request, res: Response, next: NextFunct
       message: 'Payment verified successfully.',
     });
   } catch (err: any) {
-    console.error('[VERIFY DEBUG] verifyPayment error:', err.message);
-    console.error('[VERIFY DEBUG] error stack:', err.stack);
     next(err);
   }
 }
@@ -258,16 +297,18 @@ export async function handleWebhook(req: Request, res: Response, next: NextFunct
       return;
     }
 
-    const rawBody = (req as any).rawBody || (Buffer.isBuffer(req.body) ? req.body.toString('utf8') : JSON.stringify(req.body));
-
-    let isValid = false;
-    try {
-      isValid = verifyWebhookSignature(rawBody, signature);
-    } catch {
-      console.warn('[WEBHOOK] Webhook secret not configured, skipping verification');
+    // Webhook secret must be configured in production
+    if (!env.RAZORPAY_WEBHOOK_SECRET) {
+      console.error('[WEBHOOK] RAZORPAY_WEBHOOK_SECRET not configured. Webhook rejected.');
+      res.status(400).json({ error: 'Webhook not configured' });
+      return;
     }
 
-    if (!isValid && env.RAZORPAY_WEBHOOK_SECRET) {
+    const rawBody = (req as any).rawBody || (Buffer.isBuffer(req.body) ? req.body.toString('utf8') : JSON.stringify(req.body));
+
+    const isValid = verifyWebhookSignature(rawBody, signature);
+
+    if (!isValid) {
       res.status(400).json({ error: 'Invalid signature' });
       return;
     }

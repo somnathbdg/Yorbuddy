@@ -3,15 +3,18 @@ export type UserRole = 'user' | 'buddy' | 'admin';
 export interface User {
   id: string;
   email: string;
-  password_hash: string;
-  mobile: string;
+  password_hash?: string;
+  google_id?: string | null;
+  mobile: string | null;
   full_name: string;
-  dob: string; // YYYY-MM-DD
-  gender: 'female' | 'male' | 'non-binary' | 'prefer-not-to-say';
+  dob: string | null;
+  gender: 'female' | 'male' | 'non-binary' | 'prefer-not-to-say' | null;
   role: UserRole;
   is_active: boolean;
   is_membership_paid: boolean;
   membership_paid_at?: string;
+  email_verified_at?: string;
+  phone_verified_at?: string;
   created_at: string;
   updated_at: string;
 }
@@ -19,6 +22,7 @@ export interface User {
 export interface Profile {
   id: string;
   user_id: string;
+  full_name?: string;
   bio: string;
   photo_url: string;
   gallery_urls?: string[];
@@ -163,6 +167,9 @@ export interface Report {
   created_at: string;
 }
 
+export type KycStatus = 'not_submitted' | 'pending' | 'approved' | 'rejected';
+export type VerificationStatus = 'unverified' | 'verified';
+
 export interface Verification {
   id: string;
   user_id: string;
@@ -170,11 +177,19 @@ export interface Verification {
   doc_number: string;
   doc_front_url: string;
   selfie_url: string;
-  status: 'pending' | 'verified' | 'rejected';
+  status: KycStatus;
   submitted_at: string;
   reviewed_at?: string;
   reviewed_by?: string;
   rejection_reason?: string;
+}
+
+export interface UserVerificationStatus {
+  email: VerificationStatus;
+  phone: VerificationStatus;
+  kyc: KycStatus;
+  kyc_rejection_reason?: string;
+  is_fully_verified: boolean;
 }
 
 export type NotificationType =

@@ -6,14 +6,16 @@ import {
   updateBookingStatus,
 } from '../services/bookingService.js';
 import { authenticate } from '../middleware/auth.js';
+import { requireMembership } from '../middleware/membership.js';
+import { requireVerification } from '../middleware/verification.js';
 
 const router = Router();
 
 /**
  * POST /api/bookings
- * Create a new booking.
+ * Create a new booking. Requires authentication AND active membership AND full verification.
  */
-router.post('/', authenticate, createBooking);
+router.post('/', authenticate, requireMembership, requireVerification, createBooking);
 
 /**
  * GET /api/bookings

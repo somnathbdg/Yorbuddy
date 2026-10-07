@@ -18,7 +18,9 @@ import {
 import { useApp } from '../../context/AppContext';
 import { bookingService, Booking } from '../../services/booking';
 import { paymentService } from '../../services/payment';
-import { membershipService, MembershipStatus } from '../../services/membership';
+import { userService } from '../../services/user';
+import { KycStatus, VerificationStatus } from '../../types/database';
+import { EmailVerificationPanel, PhoneVerificationPanel, KycSubmissionPanel } from './VerificationPanel';
 
 export const UserDashboard: React.FC = () => {
   const {
@@ -35,6 +37,12 @@ export const UserDashboard: React.FC = () => {
     setActiveChatBooking,
     setActiveChatBuddy,
     setActiveTab,
+    verificationStatus,
+    setVerificationStatus,
+    kycRecords,
+    setKycRecords,
+    apiMembership,
+    fetchApiMembership,
   } = useApp();
 
   const [bookingFilter, setBookingFilter] = useState<'all' | 'confirmed' | 'completed' | 'cancelled'>('all');
@@ -46,10 +54,6 @@ export const UserDashboard: React.FC = () => {
   const [payProcessingId, setPayProcessingId] = useState<string | null>(null);
   const [payErrorId, setPayErrorId] = useState<string | null>(null);
   const [paySuccessId, setPaySuccessId] = useState<string | null>(null);
-
-  // Real membership from API
-  const [apiMembership, setApiMembership] = useState<MembershipStatus | null>(null);
-  const [isLoadingMembership, setIsLoadingMembership] = useState<boolean>(true);
 
   // Fetch bookings from API
   const fetchBookings = useCallback(async () => {
@@ -69,20 +73,17 @@ export const UserDashboard: React.FC = () => {
 
   useEffect(() => {
     fetchBookings();
-    fetchMembershipStatus();
-  }, [fetchBookings]);
+    fetchApiMembership();
+    fetchVerificationStatus();
+  }, [fetchBookings, fetchApiMembership]);
 
-  // Fetch real membership status from API
-  const fetchMembershipStatus = useCallback(async () => {
-    setIsLoadingMembership(true);
+  // Fetch real verification status from API
+  const fetchVerificationStatus = useCallback(async () => {
     try {
-      const data = await membershipService.getMembershipStatus();
-      setApiMembership(data);
+      const status = await userService.getVerificationStatus();
+      setVerificationStatus(status);
     } catch (err) {
-      console.error('Failed to load membership:', err);
-      setApiMembership(null);
-    } finally {
-      setIsLoadingMembership(false);
+      console.error('Failed to load verification status:', err);
     }
   }, []);
 
@@ -194,8 +195,8 @@ export const UserDashboard: React.FC = () => {
           <div className="flex items-center space-x-4">
             <div className="relative">
               <img
-                src={userProfile.photo_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'}
-                alt={currentUser.full_name}
+                src={userProfile?.photo_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'}
+                alt={currentUser?.full_name}
                 className="w-16 h-16 rounded-full object-cover ring-4 ring-blue-500/20"
               />
               <span className="absolute bottom-0 right-0 w-4 h-4 bg-emerald-500 rounded-full border-2 border-white" />
@@ -204,14 +205,14 @@ export const UserDashboard: React.FC = () => {
             <div>
               <div className="flex items-center space-x-2">
                 <h1 className="text-xl sm:text-2xl font-black text-slate-900">
-                  {currentUser.full_name}
+                  {currentUser?.full_name}
                 </h1>
                 <span className="w-5 h-5 rounded-full bg-blue-600 text-white text-[11px] font-bold flex items-center justify-center">
                   ✓
                 </span>
               </div>
               <p className="text-xs text-slate-500">
-                {currentUser.email} • {currentUser.phone} • {userProfile.city}
+                {currentUser?.email} • {currentUser?.phone} • {userProfile?.city}
               </p>
             </div>
           </div>
@@ -233,9 +234,12 @@ export const UserDashboard: React.FC = () => {
               <p className="text-[11px] text-slate-600">
                 {apiMembership
                   ? (apiMembership.plan_id === 'MONTH_1' ? '1 Month Plan'
-                    : apiMembership.plan_id === 'MONTH_6' ? '6 Months Plan'
-                    : apiMembership.plan_id === 'YEAR_1' ? '1 Year Plan'
-                    : 'Lifetime Plan')
+                    : apiMembership.plan_id === 'WEEK_1' ? '1 Week Plan'
+                    : apiMembership.plan_id === 'FREE_TRIAL' ? 'Free Trial'
+                    : apiMembership.plan_id === 'MONTH_6' ? '6 Months Plan (Legacy)'
+                    : apiMembership.plan_id === 'YEAR_1' ? '1 Year Plan (Legacy)'
+                    : apiMembership.plan_id === 'LIFETIME' ? 'Lifetime Plan (Legacy)'
+                    : apiMembership.plan_id)
                     + (apiMembership.expiry_date
                       ? ' • Expires ' + new Date(apiMembership.expiry_date).toLocaleDateString('en-IN')
                       : ' • Never expires')
@@ -278,10 +282,50 @@ export const UserDashboard: React.FC = () => {
             <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
               Safety Verification
             </span>
-            <span className="text-xs font-black text-emerald-600 mt-2 block flex items-center">
-              <CheckCircle2 className="w-4 h-4 mr-1" />
-              Govt KYC Cleared
-            </span>
+            {verificationStatus ? (
+              <>
+                <span className={`text-xs font-black mt-2 block flex items-center ${verificationStatus.is_fully_verified ? 'text-emerald-600' : 'text-amber-600'}`}>
+                  {verificationStatus.is_fully_verified ? (
+                    <>
+                      <CheckCircle2 className="w-4 h-4 mr-1" />
+                      Fully Verified
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="w-4 h-4 mr-1" />
+                      Verification Pending
+                    </>
+                  )}
+                </span>
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Email: {verificationStatus.email} | Phone: {verificationStatus.phone} | KYC: {verificationStatus.kyc}
+                </p>
+              </>
+            ) : (
+              <span className="text-xs font-black text-slate-600 mt-2 block flex items-center">
+                <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                Loading...
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Verification Center */}
+        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-6">
+          <div>
+            <div className="flex items-center space-x-2">
+              <ShieldCheck className="w-6 h-6 text-blue-600" />
+              <h2 className="text-xl font-black text-slate-900">Verification Center</h2>
+            </div>
+            <p className="text-xs text-slate-500 mt-1">
+              Verify your identity to use all features. Your data is secure and only visible to you and admin reviewers.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <EmailVerificationPanel onStatusChange={fetchVerificationStatus} />
+            <PhoneVerificationPanel onStatusChange={fetchVerificationStatus} />
+            <KycSubmissionPanel onStatusChange={fetchVerificationStatus} />
           </div>
         </div>
 
@@ -353,7 +397,41 @@ export const UserDashboard: React.FC = () => {
           {!isLoadingBookings && !bookingsError && filteredBookings.length > 0 && (
             <div className="space-y-4">
               {filteredBookings.map((b) => {
-                const buddyObj = buddies.find((bud) => bud.user.id === b.buddy_id) || buddies[0];
+                // Resolve buddy: use only API-provided buddy summary (booking.buddy).
+                // Never fall back to local mock data — each booking keeps its own buddy.
+                const buddyObj = b.buddy
+                  ? {
+                      user: { id: b.buddy.id, full_name: b.buddy.full_name },
+                      profile: {
+                        photo_url: b.buddy.photo_url || '',
+                        city: b.buddy.city || '',
+                        area: '',
+                        languages: [],
+                        interests: [],
+                      },
+                      buddyProfile: {
+                        id: '',
+                        hourly_rate: b.buddy.hourly_rate || 0,
+                        headline: '',
+                        bio: '',
+                        rating: b.buddy.rating || 0,
+                        review_count: b.buddy.review_count || 0,
+                        is_verified: b.buddy.is_verified || false,
+                        is_online: false,
+                        response_time: b.buddy.response_time || '',
+                        badge_text: b.buddy.badge_text || '',
+                        supported_activity_ids: [],
+                        safety_pledge_signed: true,
+                      },
+                    }
+                  : null;
+                const buddyName = buddyObj
+                  ? buddyObj.user.full_name
+                  : b.buddy_id
+                  ? `Buddy (${b.buddy_id.slice(0, 8)})`
+                  : 'Unknown Buddy';
+                const buddyPhoto = buddyObj?.profile?.photo_url || '';
+
                 const actObj = activities.find((a) => a.id === b.activity_id) || activities[0];
 
                 return (
@@ -363,15 +441,21 @@ export const UserDashboard: React.FC = () => {
                   >
                     {/* Companion info */}
                     <div className="flex items-start space-x-3.5">
-                      <img
-                        src={buddyObj.profile.photo_url}
-                        alt={buddyObj.user.full_name}
-                        className="w-14 h-14 rounded-2xl object-cover"
-                      />
+                      {buddyPhoto ? (
+                        <img
+                          src={buddyPhoto}
+                          alt={buddyName}
+                          className="w-14 h-14 rounded-2xl object-cover"
+                        />
+                      ) : (
+                        <div className="w-14 h-14 rounded-2xl bg-slate-200 flex items-center justify-center text-slate-400 text-xl font-bold">
+                          {buddyName.charAt(0)}
+                        </div>
+                      )}
                       <div>
                         <div className="flex items-center space-x-2">
                           <h4 className="text-sm font-bold text-slate-900">
-                            {buddyObj.user.full_name}
+                            {buddyName}
                           </h4>
                           <span
                             className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase ${

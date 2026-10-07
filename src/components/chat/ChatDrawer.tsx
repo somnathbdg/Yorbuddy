@@ -33,6 +33,15 @@ export const ChatDrawer: React.FC = () => {
 
   const currentBooking = activeChatBooking;
   const buddy = activeChatBuddy;
+  // Fallback: resolve buddy name from the booking's API-provided buddy summary
+  const buddyName = buddy
+    ? buddy.user.full_name
+    : currentBooking?.buddy
+    ? currentBooking.buddy.full_name
+    : 'Unknown Buddy';
+  const buddyPhoto = buddy
+    ? buddy.profile.photo_url
+    : currentBooking?.buddy?.photo_url || null;
 
   const bookingId = currentBooking ? currentBooking.id : 'general-chat';
   const chatMessages = messages.filter((m) =>
@@ -66,22 +75,24 @@ export const ChatDrawer: React.FC = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <div className="relative">
-                <img
-                  src={
-                    buddy
-                      ? buddy.profile.photo_url
-                      : 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=120&q=80'
-                  }
-                  alt="Buddy"
-                  referrerPolicy="no-referrer"
-                  className="w-10 h-10 rounded-full object-cover ring-2 ring-blue-500/20"
-                />
+                {buddyPhoto ? (
+                  <img
+                    src={buddyPhoto}
+                    alt="Buddy"
+                    referrerPolicy="no-referrer"
+                    className="w-10 h-10 rounded-full object-cover ring-2 ring-blue-500/20"
+                  />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-400 text-sm font-bold">
+                    {buddyName.charAt(0)}
+                  </div>
+                )}
                 <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white"></span>
               </div>
               <div>
                 <div className="flex items-center space-x-1.5">
                   <h3 className="text-sm font-bold text-slate-900">
-                    {buddy ? buddy.user.full_name : 'Neha Sharma'}
+                    {buddyName}
                   </h3>
                   <span className="text-blue-600 text-xs">✓</span>
                 </div>

@@ -80,7 +80,8 @@ export async function searchBuddies(req: Request, res: Response, next: NextFunct
     // Step 1: Get buddy_profiles with filters that apply to buddy_profiles table
     let buddyQuery = supabase
       .from('buddy_profiles')
-      .select('user_id, id, hourly_rate, headline, bio, rating, review_count, is_verified, is_online, response_time, badge_text, supported_activity_ids, safety_pledge_signed, created_at');
+      .select('user_id, id, hourly_rate, headline, bio, rating, review_count, is_verified, is_online, response_time, badge_text, supported_activity_ids, safety_pledge_signed, created_at')
+      .eq('verification_status', 'approved');
 
     if (params.min_rating !== undefined) {
       buddyQuery = buddyQuery.gte('rating', params.min_rating);
@@ -112,8 +113,14 @@ export async function searchBuddies(req: Request, res: Response, next: NextFunct
     const sortParts = getSortParts(params.sort);
     buddyQuery = buddyQuery.order(sortParts.column, { ascending: sortParts.ascending });
 
-    const offset = (params.page - 1) * params.per_page;
-    buddyQuery = buddyQuery.range(offset, offset + params.per_page - 1);
+    // When a search query is provided, we must fetch ALL eligible records
+    // (without DB pagination) so the in-memory query filter can match across
+    // the full dataset. Pagination is applied AFTER filtering instead.
+    const hasQuery = !!params.query;
+    if (!hasQuery) {
+      const offset = (params.page - 1) * params.per_page;
+      buddyQuery = buddyQuery.range(offset, offset + params.per_page - 1);
+    }
 
     const { data: buddyProfiles, error: buddyError } = await buddyQuery;
 
@@ -203,7 +210,15 @@ export async function searchBuddies(req: Request, res: Response, next: NextFunct
     const total = filteredBuddies.length;
     const totalPages = Math.ceil(total / params.per_page);
 
-    const buddies = filteredBuddies.map((item: any) => buildPublicBuddyResponse(item.user, item.profile, item));
+    // When query is present, paginate in memory after filtering.
+    // Without query, DB pagination already limited results to the current page.
+    let pageBuddies = filteredBuddies;
+    if (hasQuery) {
+      const offset = (params.page - 1) * params.per_page;
+      pageBuddies = filteredBuddies.slice(offset, offset + params.per_page);
+    }
+
+    const buddies = pageBuddies.map((item: any) => buildPublicBuddyResponse(item.user, item.profile, item));
 
     res.status(200).json({
       data: buddies,

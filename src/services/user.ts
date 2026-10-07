@@ -12,6 +12,8 @@ export interface UserProfile {
     is_active: boolean;
     is_membership_paid: boolean;
     membership_paid_at: string | null;
+    email_verified_at: string | null;
+    phone_verified_at: string | null;
     created_at: string;
     updated_at: string;
   };
@@ -71,6 +73,64 @@ export interface BuddyProfilePayload {
   safety_pledge_signed?: boolean;
 }
 
+export interface VerificationStatusResponse {
+  email: 'unverified' | 'verified';
+  phone: 'unverified' | 'verified';
+  kyc: 'not_submitted' | 'pending' | 'approved' | 'rejected';
+  kyc_rejection_reason?: string;
+  is_fully_verified: boolean;
+}
+
+export interface KycSubmission {
+  doc_type: 'aadhaar' | 'pan' | 'passport' | 'voter_id';
+  doc_front_url: string;
+  selfie_url: string;
+}
+
+export interface KycRecord {
+  id: string;
+  doc_type: string;
+  status: 'pending' | 'approved' | 'rejected';
+  rejection_reason?: string;
+  submitted_at: string;
+  reviewed_at?: string;
+}
+
+export interface AdminPendingKyc {
+  id: string;
+  user_id: string;
+  doc_type: string;
+  status: string;
+  submitted_at: string;
+  user: {
+    id: string;
+    full_name: string;
+    email: string;
+    phone: string | null;
+  };
+}
+
+export interface AdminKycDetail {
+  id: string;
+  user_id: string;
+  doc_type: string;
+  doc_front_url: string;
+  selfie_url: string;
+  status: 'pending' | 'approved' | 'rejected';
+  rejection_reason?: string;
+  submitted_at: string;
+  reviewed_at?: string;
+  reviewed_by?: string;
+  user: {
+    id: string;
+    full_name: string;
+    email: string;
+    phone: string | null;
+    email_verified: boolean;
+    phone_verified: boolean;
+  };
+}
+
 class UserService {
   async getProfile(): Promise<UserProfile> {
     const response = await apiClient.get('/users/me');
@@ -90,6 +150,77 @@ class UserService {
   async updateBuddyProfile(payload: BuddyProfilePayload) {
     const response = await apiClient.patch('/users/me/buddy', payload);
     return response.data.data;
+  }
+
+  // ========== Verification & KYC ==========
+
+  async getVerificationStatus(): Promise<VerificationStatusResponse> {
+    const response = await apiClient.get('/verification/me');
+    return response.data.data;
+  }
+
+  async requestEmailCode(): Promise<{ message: string; dev_code?: string }> {
+    const response = await apiClient.post('/verification/email/request');
+    return response.data;
+  }
+
+  async verifyEmail(code: string): Promise<{ message: string }> {
+    const response = await apiClient.post('/verification/email/verify', { code });
+    return response.data;
+  }
+
+  async requestPhoneCode(phone: string): Promise<{ message: string; dev_code?: string }> {
+    const response = await apiClient.post('/verification/phone/request', { phone });
+    return response.data;
+  }
+
+  async verifyPhone(code: string): Promise<{ message: string }> {
+    const response = await apiClient.post('/verification/phone/verify', { code });
+    return response.data;
+  }
+
+  async submitKyc(payload: KycSubmission): Promise<{ data: { id: string; status: string }; message: string }> {
+    const response = await apiClient.post('/kyc/submit', payload);
+    return response.data;
+  }
+
+  async getMyKycStatus(): Promise<{ data: KycRecord | null }> {
+    const response = await apiClient.get('/kyc/status');
+    return response.data;
+  }
+
+  // ========== Admin KYC ==========
+
+  async getPendingKyc(): Promise<{ data: AdminPendingKyc[]; count: number }> {
+    const response = await apiClient.get('/admin/kyc/pending');
+    return response.data;
+  }
+
+  async getKycById(id: string): Promise<{ data: AdminKycDetail }> {
+    const response = await apiClient.get(`/admin/kyc/${id}`);
+    return response.data;
+  }
+
+  async approveKyc(id: string): Promise<{ data: { id: string; status: string; reviewed_at: string; reviewed_by: string }; message: string }> {
+    const response = await apiClient.post(`/admin/kyc/${id}/approve`);
+    return response.data;
+  }
+
+  async rejectKyc(id: string, reason: string): Promise<{ data: { id: string; status: string; rejection_reason: string; reviewed_at: string; reviewed_by: string }; message: string }> {
+    const response = await apiClient.post(`/admin/kyc/${id}/reject`, { reason });
+    return response.data;
+  }
+
+  // ========== Admin Dashboard Stats ==========
+
+  async getAdminStats(): Promise<{ data: { total_members: number; verified_buddies: number; total_bookings: number; pending_kyc: number } }> {
+    const response = await apiClient.get('/admin/stats');
+    return response.data;
+  }
+
+  async getVerifiedBuddies(): Promise<{ data: any[]; count: number }> {
+    const response = await apiClient.get('/admin/verified-buddies');
+    return response.data;
   }
 }
 

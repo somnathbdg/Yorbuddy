@@ -12,30 +12,41 @@ import {
   CreditCard,
   Sparkles,
   ArrowRight,
+  ArrowLeft,
   UploadCloud,
   FileCheck,
   Smartphone,
+  Chrome,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { authService } from '../../services/auth';
+import { membershipService } from '../../services/membership';
 
 export const AuthModal: React.FC = () => {
   const {
     isRegisterModalOpen,
     setIsRegisterModalOpen,
+    setActiveRole,
     registerStep,
     setRegisterStep,
+    pendingMembershipPlan,
+    setPendingMembershipPlan,
     activateMembership,
     setActiveTab,
     activities,
     currentUser,
     setCurrentUser,
+    setIsAuthenticated,
     userProfile,
     setUserProfile,
+    isProcessingPayment,
+    isPaymentComplete,
+    membershipErrorText: ctxErrorText,
+    paymentErrorId: ctxPayErrorId,
+    authMode,
+    setAuthMode,
+    fetchApiMembership,
   } = useApp();
-
-  // Mode: 'register' or 'login'
-  const [authMode, setAuthMode] = useState<'register' | 'login'>('register');
 
   // Step 1 Form Data
   const [fullName, setFullName] = useState('');
@@ -46,6 +57,45 @@ export const AuthModal: React.FC = () => {
   const [dob, setDob] = useState('');
   const [gender, setGender] = useState<'male' | 'female' | 'non-binary' | 'prefer-not-to-say'>('male');
   const [city, setCity] = useState('');
+
+  // Forgot password state
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
+  const [isForgotPasswordMode, setIsForgotPasswordMode] = useState(false);
+  const [forgotPasswordSuccess, setForgotPasswordSuccess] = useState(false);
+
+  // Forgot password submit handler
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorText('');
+    setIsLoading(true);
+
+    try {
+      await authService.forgotPassword(forgotPasswordEmail);
+      setForgotPasswordSuccess(true);
+    } catch (err: any) {
+      const apiError = err.response?.data?.error;
+      setErrorText(apiError?.message || 'Failed to send reset link. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle "Forgot password?" click from login
+  const handleForgotPasswordClick = () => {
+    setIsForgotPasswordMode(true);
+    setForgotPasswordEmail(email); // Pre-fill with current email if any
+    setForgotPasswordSuccess(false);
+    setErrorText('');
+  };
+
+  // Return to login from forgot password
+  const handleBackToLogin = () => {
+    setIsForgotPasswordMode(false);
+    setForgotPasswordEmail('');
+    setForgotPasswordSuccess(false);
+    setErrorText('');
+  };
+
 
   // Step 2 Form Data
   const [bio, setBio] = useState('');
@@ -64,17 +114,18 @@ export const AuthModal: React.FC = () => {
   // Step 4 Payment
   const [paymentMethod, setPaymentMethod] = useState<'upi' | 'credit_card' | 'debit_card' | 'net_banking'>('upi');
   const [upiId, setUpiId] = useState('');
-  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
-  const [isPaymentComplete, setIsPaymentComplete] = useState(false);
   const [errorText, setErrorText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   // Listen for auth expired events
   useEffect(() => {
     const handleAuthExpired = () => {
-      setIsRegisterModalOpen(true);
-      setAuthMode('login');
-      setErrorText('Session expired. Please login again.');
+      // Only show session expired if user was previously logged in
+      if (authService.isAuthenticated()) {
+        setIsRegisterModalOpen(true);
+        setAuthMode('login');
+        setErrorText('Session expired. Please login again.');
+      }
     };
     window.addEventListener('yorbuddy:auth-expired', handleAuthExpired);
     return () => window.removeEventListener('yorbuddy:auth-expired', handleAuthExpired);
@@ -84,6 +135,8 @@ export const AuthModal: React.FC = () => {
   useEffect(() => {
     if (isRegisterModalOpen) {
       setErrorText('');
+      setForgotPasswordSuccess(false);
+      setIsForgotPasswordMode(false);
       if (authMode === 'login' && currentUser?.email) {
         setEmail(currentUser.email);
       }
@@ -113,6 +166,11 @@ export const AuthModal: React.FC = () => {
       return;
     }
 
+    if (!mobile.trim() || mobile.trim().length < 10) {
+      setErrorText('Please enter a valid mobile number.');
+      return;
+    }
+
     if (password.length < 8) {
       setErrorText('Password must be at least 8 characters.');
       return;
@@ -137,8 +195,7 @@ export const AuthModal: React.FC = () => {
         city,
       });
 
-      setCurrentUser({
-        ...currentUser,
+      const newUser = {
         id: result.user.id,
         email: result.user.email,
         full_name: result.user.full_name,
@@ -150,12 +207,15 @@ export const AuthModal: React.FC = () => {
         updated_at: new Date().toISOString(),
         dob,
         gender,
-      });
+      };
+
+      setCurrentUser(newUser);
+      setIsAuthenticated(true);
 
       setRegisterStep(2);
     } catch (err: any) {
       const apiError = err.response?.data?.error;
-      setErrorText(apiError?.message || 'Registration failed. Please try again.');
+      setErrorText(apiError?.message || 'Step 3 failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -175,18 +235,17 @@ export const AuthModal: React.FC = () => {
 
   const handleStep3Submit = (e: React.FormEvent) => {
     e.preventDefault();
+    // All plans (including TRIAL_1D) require payment — proceed to Step 4
     setRegisterStep(4);
   };
 
+
+
   const handlePaymentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setIsProcessingPayment(true);
-
-    setTimeout(() => {
-      activateMembership(paymentMethod);
-      setIsProcessingPayment(false);
-      setIsPaymentComplete(true);
-    }, 1000);
+    // activateMembership now triggers the real Razorpay checkout flow
+    // The payment result is handled asynchronously via the Razorpay handler
+    activateMembership(paymentMethod);
   };
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
@@ -197,8 +256,7 @@ export const AuthModal: React.FC = () => {
     try {
       const result = await authService.login({ email, password });
 
-      setCurrentUser({
-        ...currentUser,
+      const loggedInUser = {
         id: result.user.id,
         email: result.user.email,
         full_name: result.user.full_name,
@@ -210,10 +268,57 @@ export const AuthModal: React.FC = () => {
         updated_at: new Date().toISOString(),
         dob: result.user.dob || '',
         gender: result.user.gender || 'prefer-not-to-say',
-      });
+      };
+
+      setCurrentUser(loggedInUser);
+      setIsAuthenticated(true);
 
       setIsRegisterModalOpen(false);
+      setActiveRole(result.user.role);
       setActiveTab('user-dashboard');
+    } catch (err: any) {
+      const apiError = err.response?.data?.error;
+      setErrorText(apiError?.message || 'Login failed. Please check your credentials.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Admin login handler - uses same auth but checks for admin role
+  const handleAdminLoginSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorText('');
+    setIsLoading(true);
+
+    try {
+      const result = await authService.login({ email, password });
+
+      // CRITICAL: Check admin role
+      if (result.user.role !== 'admin') {
+        setErrorText('Admin access required. Please log in with an admin account.');
+        return;
+      }
+
+      const loggedInUser = {
+        id: result.user.id,
+        email: result.user.email,
+        full_name: result.user.full_name,
+        phone: result.user.phone || '',
+        role: result.user.role,
+        is_active: result.user.is_active,
+        is_membership_paid: result.user.is_membership_paid,
+        created_at: result.user.created_at,
+        updated_at: new Date().toISOString(),
+        dob: result.user.dob || '',
+        gender: result.user.gender || 'prefer-not-to-say',
+      };
+
+      setCurrentUser(loggedInUser);
+      setIsAuthenticated(true);
+
+      setIsRegisterModalOpen(false);
+      setActiveRole('admin');
+      setActiveTab('admin-panel');
     } catch (err: any) {
       const apiError = err.response?.data?.error;
       setErrorText(apiError?.message || 'Login failed. Please check your credentials.');
@@ -239,6 +344,8 @@ export const AuthModal: React.FC = () => {
     );
   };
 
+  const totalSteps = 4;
+
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200">
       <div className="relative w-full max-w-xl bg-white rounded-3xl shadow-2xl overflow-hidden my-6 border border-slate-100 flex flex-col max-h-[90vh]">
@@ -246,17 +353,19 @@ export const AuthModal: React.FC = () => {
         <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-md px-6 py-4 border-b border-slate-100 flex items-center justify-between">
           <div>
             <div className="flex items-center space-x-2">
-              <span className="text-base font-black text-slate-900">
-                {authMode === 'login' ? 'Welcome Back' : 'Join YorBuddy'}
+              <span className="text-lg font-black text-slate-900">
+                {authMode === 'admin' ? 'Admin Login' : authMode === 'login' ? 'Welcome Back' : 'Join YorBuddy'}
               </span>
               {authMode === 'register' && (
-                <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[10px] font-bold">
-                  Step {registerStep} of 4
+                <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-xs font-bold">
+                  Step {registerStep} of {totalSteps}
                 </span>
               )}
             </div>
-            <p className="text-[11px] text-slate-500">
-              {authMode === 'login'
+            <p className="text-xs text-slate-500">
+              {authMode === 'admin'
+                ? 'Secure access for YorBuddy administrators only'
+                : authMode === 'login'
                 ? 'Login to access your dashboard and messages'
                 : '18+ Verified Platonic Companionship Platform'}
             </p>
@@ -273,7 +382,7 @@ export const AuthModal: React.FC = () => {
         {/* Step Progress Tracker */}
         {authMode === 'register' && !isPaymentComplete && (
           <div className="px-6 pt-3 pb-2 bg-slate-50 border-b border-slate-100">
-            <div className="grid grid-cols-4 gap-2 text-center text-[10px] font-bold">
+            <div className="grid gap-2 text-center text-xs font-bold grid-cols-4">
               <span className={registerStep >= 1 ? 'text-blue-600' : 'text-slate-400'}>
                 1. Basics
               </span>
@@ -290,7 +399,7 @@ export const AuthModal: React.FC = () => {
             <div className="w-full bg-slate-200 h-1.5 rounded-full mt-1.5 overflow-hidden">
               <div
                 className="h-full bg-gradient-to-r from-blue-600 to-pink-500 transition-all duration-300"
-                style={{ width: `${(registerStep / 4) * 100}%` }}
+                style={{ width: `${(registerStep / totalSteps) * 100}%` }}
               />
             </div>
           </div>
@@ -298,11 +407,188 @@ export const AuthModal: React.FC = () => {
 
         {/* Modal Body */}
         <div className="overflow-y-auto p-6 flex-1">
-          {/* LOGIN MODE */}
-          {authMode === 'login' ? (
+          {/* FORGOT PASSWORD MODE - checked first so it works from login */}
+          {isForgotPasswordMode ? (
+            <div className="space-y-4">
+              <div className="text-center mb-4">
+                <div className="w-14 h-14 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mx-auto mb-3">
+                  <Mail className="w-6 h-6" />
+                </div>
+                <h3 className="text-lg font-black text-slate-900">Reset Your Password</h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Enter your email address and we&apos;ll send you a reset link.
+                </p>
+              </div>
+
+              {forgotPasswordSuccess ? (
+                <div className="text-center py-4 space-y-4">
+                  <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
+                    <CheckCircle2 className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-900">Check Your Email</h4>
+                    <p className="text-xs text-slate-600 mt-1">
+                      If an account exists for this email, you will receive a password reset link.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleBackToLogin}
+                    className="w-full py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-pink-500 text-white font-bold text-xs"
+                  >
+                    Back to Login
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleForgotPassword} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                      Email Address
+                    </label>
+                    <div className="relative">
+                      <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="email"
+                        value={forgotPasswordEmail}
+                        onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                        className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                        required
+                        placeholder="you@example.com"
+                        autoComplete="email"
+                      />
+                    </div>
+                  </div>
+
+                  {errorText && (
+                    <p className="text-sm font-bold text-rose-600 bg-rose-50 p-2 rounded-lg border border-rose-200">
+                      {errorText}
+                    </p>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-600 to-pink-500 text-white font-bold text-sm shadow-md shadow-blue-500/20 disabled:opacity-50 flex items-center justify-center space-x-2"
+                  >
+                    {isLoading ? (
+                      <>
+                        <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>Sending Reset Link...</span>
+                      </>
+                    ) : (
+                      'Send Reset Link'
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleBackToLogin}
+                    className="w-full flex items-center justify-center space-x-1 text-xs text-slate-500 hover:text-blue-600 py-2"
+                  >
+                    <ArrowLeft className="w-3 h-3" />
+                    <span>Back to Login</span>
+                  </button>
+                </form>
+              )}
+            </div>
+          ) : authMode === 'admin' ? (
+            /* ADMIN LOGIN MODE */
+            <form onSubmit={handleAdminLoginSubmit} className="space-y-4">
+              <div className="text-center mb-2">
+                <div className="w-14 h-14 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center mx-auto mb-3">
+                  <ShieldCheck className="w-6 h-6" />
+                </div>
+                <h3 className="text-lg font-black text-slate-900">Admin Login</h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Access the YorBuddy Administration Panel
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Admin Email
+                </label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    required
+                    placeholder="admin@example.com"
+                    autoComplete="email"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Admin Password
+                </label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    required
+                    autoComplete="current-password"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end text-xs text-slate-500">
+                <button
+                  type="button"
+                  onClick={handleForgotPasswordClick}
+                  className="text-blue-600 hover:underline"
+                >
+                  Forgot password?
+                </button>
+              </div>
+
+              {errorText && (
+                <p className="text-sm font-bold text-rose-600 bg-rose-50 p-2 rounded-lg border border-rose-200">
+                  {errorText}
+                </p>
+              )}
+
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-slate-700 to-slate-900 text-white font-bold text-xs shadow-md shadow-slate-500/20 disabled:opacity-50 flex items-center justify-center space-x-2"
+              >
+                {isLoading ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                    <span>Logging in...</span>
+                  </>
+                ) : (
+                  'Login to Admin Panel'
+                )}
+              </button>
+
+              <div className="text-center pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMode('login');
+                    setErrorText('');
+                    setPassword('');
+                    setEmail('');
+                  }}
+                  className="text-xs text-slate-500 hover:text-blue-600"
+                >
+                  ← Back to User Login
+                </button>
+              </div>
+            </form>
+          ) : authMode === 'login' ? (
             <form onSubmit={handleLoginSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                <label className="block text-sm font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                   Email Address
                 </label>
                 <div className="relative">
@@ -319,7 +605,7 @@ export const AuthModal: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                <label className="block text-sm font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                   Password
                 </label>
                 <div className="relative">
@@ -340,13 +626,17 @@ export const AuthModal: React.FC = () => {
                   <input type="checkbox" defaultChecked className="rounded text-blue-600" />
                   <span>Remember me</span>
                 </label>
-                <a href="#" className="text-blue-600 hover:underline">
+                <button
+                  type="button"
+                  onClick={handleForgotPasswordClick}
+                  className="text-blue-600 hover:underline"
+                >
                   Forgot password?
-                </a>
+                </button>
               </div>
 
               {errorText && (
-                <p className="text-xs font-bold text-rose-600 bg-rose-50 p-2 rounded-lg border border-rose-200">
+                <p className="text-sm font-bold text-rose-600 bg-rose-50 p-2 rounded-lg border border-rose-200">
                   {errorText}
                 </p>
               )}
@@ -354,7 +644,7 @@ export const AuthModal: React.FC = () => {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-600 to-pink-500 text-white font-bold text-xs shadow-md shadow-blue-500/20 disabled:opacity-50 flex items-center justify-center space-x-2"
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-600 to-pink-500 text-white font-bold text-sm shadow-md shadow-blue-500/20 disabled:opacity-50 flex items-center justify-center space-x-2"
               >
                 {isLoading ? (
                   <>
@@ -366,8 +656,30 @@ export const AuthModal: React.FC = () => {
                 )}
               </button>
 
+              {/* Divider */}
+              <div className="relative my-4">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-slate-200"></div>
+                </div>
+                <div className="relative flex justify-center text-xs">
+                  <span className="bg-white px-3 text-slate-400 font-medium">or continue with</span>
+                </div>
+              </div>
+
+              {/* Google Login Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  window.location.href = '/api/auth/google';
+                }}
+                className="w-full py-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold text-sm flex items-center justify-center space-x-2 transition-colors"
+              >
+                <Chrome className="w-5 h-5 text-blue-500" />
+                <span>Continue with Google</span>
+              </button>
+
               <div className="text-center pt-2">
-                <span className="text-xs text-slate-500">Don&apos;t have an account? </span>
+                <span className="text-sm text-slate-500">Don&apos;t have an account? </span>
                 <button
                   type="button"
                   onClick={() => {
@@ -422,7 +734,7 @@ export const AuthModal: React.FC = () => {
               {registerStep === 1 && (
                 <form onSubmit={handleStep1Submit} className="space-y-4">
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    <label className="block text-sm font-bold text-slate-700 uppercase tracking-wider mb-1">
                       Full Name (As per Govt ID)
                     </label>
                     <div className="relative">
@@ -432,7 +744,7 @@ export const AuthModal: React.FC = () => {
                         value={fullName}
                         onChange={(e) => setFullName(e.target.value)}
                         placeholder="e.g. Somnath Banerjee"
-                        className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-800"
+                        className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm font-medium text-slate-800"
                         required
                       />
                     </div>
@@ -440,7 +752,7 @@ export const AuthModal: React.FC = () => {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                      <label className="block text-sm font-bold text-slate-700 uppercase tracking-wider mb-1">
                         Email Address
                       </label>
                       <div className="relative">
@@ -450,7 +762,7 @@ export const AuthModal: React.FC = () => {
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
                           placeholder="you@example.com"
-                          className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-800"
+                          className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm font-medium text-slate-800"
                           required
                           autoComplete="email"
                         />
@@ -458,24 +770,25 @@ export const AuthModal: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                      <label className="block text-sm font-bold text-slate-700 uppercase tracking-wider mb-1">
                         Mobile Number
                       </label>
                       <div className="relative">
                         <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                         <input
-                          type="tel"
-                          value={mobile}
-                          onChange={(e) => setMobile(e.target.value)}
-                          placeholder="+91 98765 43210"
-                          className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-800"
+                        type="tel"
+                        value={mobile}
+                        onChange={(e) => setMobile(e.target.value)}
+                        placeholder="+91 98765 43210"
+                        className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm font-medium text-slate-800"
+                        required
                         />
                       </div>
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    <label className="block text-sm font-bold text-slate-700 uppercase tracking-wider mb-1">
                       Password (min 8 characters)
                     </label>
                     <div className="relative">
@@ -484,7 +797,7 @@ export const AuthModal: React.FC = () => {
                         type="password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-800"
+                        className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm font-medium text-slate-800"
                         required
                         minLength={8}
                         autoComplete="new-password"
@@ -493,7 +806,7 @@ export const AuthModal: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    <label className="block text-sm font-bold text-slate-700 uppercase tracking-wider mb-1">
                       Confirm Password
                     </label>
                     <div className="relative">
@@ -502,7 +815,7 @@ export const AuthModal: React.FC = () => {
                         type="password"
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
-                        className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-800"
+                        className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm font-medium text-slate-800"
                         required
                         minLength={8}
                         autoComplete="new-password"
@@ -512,7 +825,7 @@ export const AuthModal: React.FC = () => {
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center justify-between">
+                      <label className="block text-sm font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center justify-between">
                         <span>Date of Birth</span>
                         <span className="text-[10px] text-pink-600 font-bold">18+ Only</span>
                       </label>
@@ -520,19 +833,19 @@ export const AuthModal: React.FC = () => {
                         type="date"
                         value={dob}
                         onChange={(e) => setDob(e.target.value)}
-                        className="w-full p-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-800"
+                        className="w-full p-2 rounded-xl bg-slate-50 border border-slate-200 text-sm font-medium text-slate-800"
                         required
                       />
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                      <label className="block text-sm font-bold text-slate-700 uppercase tracking-wider mb-1">
                         Gender
                       </label>
                       <select
                         value={gender}
                         onChange={(e) => setGender(e.target.value as any)}
-                        className="w-full p-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-800"
+                        className="w-full p-2 rounded-xl bg-slate-50 border border-slate-200 text-sm font-medium text-slate-800"
                       >
                         <option value="male">Male</option>
                         <option value="female">Female</option>
@@ -542,7 +855,7 @@ export const AuthModal: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                      <label className="block text-sm font-bold text-slate-700 uppercase tracking-wider mb-1">
                         City
                       </label>
                       <input
@@ -550,13 +863,13 @@ export const AuthModal: React.FC = () => {
                         value={city}
                         onChange={(e) => setCity(e.target.value)}
                         placeholder="e.g. Pune"
-                        className="w-full p-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-800"
+                        className="w-full p-2 rounded-xl bg-slate-50 border border-slate-200 text-sm font-medium text-slate-800"
                       />
                     </div>
                   </div>
 
                   {errorText && (
-                    <p className="text-xs font-bold text-rose-600 bg-rose-50 p-2 rounded-lg border border-rose-200">
+                    <p className="text-sm font-bold text-rose-600 bg-rose-50 p-2 rounded-lg border border-rose-200">
                       {errorText}
                     </p>
                   )}
@@ -565,7 +878,7 @@ export const AuthModal: React.FC = () => {
                     <button
                       type="submit"
                       disabled={isLoading}
-                      className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-600 to-pink-500 text-white font-bold text-xs shadow-md shadow-blue-500/20 hover:opacity-95 transition-opacity flex items-center justify-center space-x-1 disabled:opacity-50"
+                      className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-600 to-pink-500 text-white font-bold text-sm shadow-md shadow-blue-500/20 hover:opacity-95 transition-opacity flex items-center justify-center space-x-1 disabled:opacity-50"
                     >
                       {isLoading ? (
                         <>
@@ -580,6 +893,28 @@ export const AuthModal: React.FC = () => {
                       )}
                     </button>
                   </div>
+
+                  {/* Divider */}
+                  <div className="relative my-4">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-slate-200"></div>
+                    </div>
+                    <div className="relative flex justify-center text-xs">
+                      <span className="bg-white px-3 text-slate-400 font-medium">or sign up with</span>
+                    </div>
+                  </div>
+
+                  {/* Google Sign Up Button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.location.href = '/api/auth/google';
+                    }}
+                    className="w-full py-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold text-sm flex items-center justify-center space-x-2 transition-colors"
+                  >
+                    <Chrome className="w-5 h-5 text-blue-500" />
+                    <span>Sign up with Google</span>
+                  </button>
 
                   <div className="text-center pt-2">
                     <button
@@ -600,24 +935,22 @@ export const AuthModal: React.FC = () => {
               {registerStep === 2 && (
                 <form onSubmit={handleStep2Submit} className="space-y-4">
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    <label className="block text-sm font-bold text-slate-700 uppercase tracking-wider mb-1">
                       Profile Photo
                     </label>
                     <div className="flex items-center space-x-3 p-3 bg-slate-50 rounded-2xl border border-slate-200">
-                      <img
-                        src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80"
-                        alt="Profile preview"
-                        className="w-12 h-12 rounded-full object-cover ring-2 ring-blue-500"
-                      />
+                      <div className="w-12 h-12 rounded-full bg-slate-200 flex items-center justify-center text-slate-400 text-xl font-bold">
+                        {fullName ? fullName.charAt(0).toUpperCase() : '?'}
+                      </div>
                       <div className="text-xs text-slate-500">
-                        <span className="font-bold text-slate-800 block">Clear face photo</span>
-                        <span>Used for in-person verification at public meetups.</span>
+                        <span className="font-bold text-slate-800 block">Photo upload</span>
+                        <span>You can upload a photo later from your dashboard.</span>
                       </div>
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    <label className="block text-sm font-bold text-slate-700 uppercase tracking-wider mb-1">
                       About Me (Bio)
                     </label>
                     <textarea
@@ -631,7 +964,7 @@ export const AuthModal: React.FC = () => {
 
                   {/* Interests */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    <label className="block text-sm font-bold text-slate-700 uppercase tracking-wider mb-1">
                       Your Interests & Passions
                     </label>
                     <div className="flex space-x-2 mb-2">
@@ -677,7 +1010,7 @@ export const AuthModal: React.FC = () => {
 
                   {/* Preferred Activities */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    <label className="block text-sm font-bold text-slate-700 uppercase tracking-wider mb-1">
                       Preferred Companion Activities
                     </label>
                     <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto p-1">
@@ -713,7 +1046,7 @@ export const AuthModal: React.FC = () => {
                     </button>
                     <button
                       type="submit"
-                      className="flex-1 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-pink-500 text-white font-bold text-xs shadow-md shadow-blue-500/20 hover:opacity-95 flex items-center justify-center space-x-1"
+                      className="flex-1 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-pink-500 text-white font-bold text-sm shadow-md shadow-blue-500/20 hover:opacity-95 flex items-center justify-center space-x-1"
                     >
                       <span>Continue to Verification (Step 3)</span>
                       <ArrowRight className="w-4 h-4" />
@@ -732,11 +1065,11 @@ export const AuthModal: React.FC = () => {
                         <Smartphone className="w-4 h-4 text-blue-600" />
                         <span>Mobile OTP Verification</span>
                       </div>
-                      <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 text-[10px] font-bold">
+                      <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 text-xs font-bold">
                         Pending
                       </span>
                     </div>
-                    <p className="text-[11px] text-slate-500">
+                    <p className="text-xs text-slate-500">
                       Phone OTP will be available after MSG91 integration.
                     </p>
                   </div>
@@ -746,13 +1079,13 @@ export const AuthModal: React.FC = () => {
                     <div className="flex items-center space-x-2">
                       <Mail className="w-4 h-4 text-blue-600" />
                       <div>
-                        <span className="text-xs font-bold text-slate-800 block">Email Verified</span>
-                        <span className="text-[10px] text-slate-500">{email}</span>
+                        <span className="text-xs font-bold text-slate-800 block">Email Verification</span>
+                        <span className="text-xs text-slate-500">{email}</span>
                       </div>
                     </div>
-                    <span className="text-xs font-bold text-emerald-600 flex items-center">
-                      <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-                      Active
+                    <span className="text-xs font-bold text-amber-600 flex items-center">
+                      <span className="w-2 h-2 rounded-full bg-amber-500 mr-1"></span>
+                      Pending
                     </span>
                   </div>
 
@@ -763,12 +1096,12 @@ export const AuthModal: React.FC = () => {
                         <FileCheck className="w-4 h-4 text-pink-600" />
                         <span>Government Identity Verification</span>
                       </div>
-                      <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 text-[10px] font-bold">
-                        Optional
+                      <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 text-xs font-bold">
+                        Recommended
                       </span>
                     </div>
-                    <p className="text-[11px] text-slate-500">
-                      ID verification can be completed later. You can browse buddies now.
+                    <p className="text-xs text-slate-500">
+                      ID verification is recommended for trust. You can complete it later from your dashboard.
                     </p>
 
                     <div className="grid grid-cols-2 gap-2 pt-1">
@@ -787,7 +1120,7 @@ export const AuthModal: React.FC = () => {
                         type="text"
                         value={idNumber}
                         onChange={(e) => setIdNumber(e.target.value)}
-                        placeholder="Document Number"
+                        placeholder="Document Number (optional)"
                         className="p-2 rounded-lg bg-white border border-slate-300 text-xs font-mono"
                       />
                     </div>
@@ -803,7 +1136,7 @@ export const AuthModal: React.FC = () => {
                     </button>
                     <button
                       type="submit"
-                      className="flex-1 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-pink-500 text-white font-bold text-xs shadow-md shadow-blue-500/20 hover:opacity-95 flex items-center justify-center space-x-1"
+                      className="flex-1 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-pink-500 text-white font-bold text-sm shadow-md shadow-blue-500/20 hover:opacity-95 flex items-center justify-center space-x-1"
                     >
                       <span>Proceed to Membership (Step 4)</span>
                       <ArrowRight className="w-4 h-4" />
@@ -813,28 +1146,44 @@ export const AuthModal: React.FC = () => {
               )}
 
               {/* STEP 4: Membership Payment Page */}
-              {registerStep === 4 && (
+              {registerStep === 4 && (() => {
+                // Derive amount from pendingMembershipPlan; default to TRIAL_1D ₹99
+                const planPriceMap: Record<string, number> = {
+                  TRIAL_1D: 99,
+                  WEEK_1: 499,
+                  MONTH_1: 1999,
+                };
+                const planNameMap: Record<string, string> = {
+                  TRIAL_1D: '1 Day Access',
+                  WEEK_1: '1 Week',
+                  MONTH_1: '1 Month',
+                };
+                const displayPlan = pendingMembershipPlan ?? 'TRIAL_1D';
+                const displayAmount = planPriceMap[displayPlan] ?? 99;
+                const displayPlanName = planNameMap[displayPlan] ?? 'Membership';
+
+                return (
                 <form onSubmit={handlePaymentSubmit} className="space-y-4">
                   {/* Order summary */}
                   <div className="bg-gradient-to-br from-blue-50 via-white to-pink-50 p-5 rounded-3xl border border-pink-200/80 shadow-xs space-y-3">
                     <div className="flex items-center justify-between border-b border-slate-200 pb-3">
                       <div>
-                        <h4 className="text-sm font-black text-slate-900">YorBuddy Membership</h4>
+                        <h4 className="text-base font-black text-slate-900">YorBuddy Membership</h4>
                         <p className="text-xs text-slate-500">
-                          Membership Registration & Verification
+                          {displayPlanName} Plan — Registration & Verification
                         </p>
                       </div>
                       <div className="text-right">
-                        <span className="text-2xl font-black text-slate-900">Membership</span>
+                        <span className="text-2xl font-black text-slate-900">{displayPlanName}</span>
                       </div>
                     </div>
 
-                    <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-900 font-semibold">
+                    <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 font-semibold">
                       ⚡ Important: This membership fee provides full platform access. It is NOT monthly, weekly, or recurring.
                     </div>
 
                     {/* Benefits Checklist */}
-                    <div className="space-y-1.5 text-xs text-slate-700 pt-1">
+                    <div className="space-y-1.5 text-sm text-slate-700 pt-1">
                       <p className="font-bold text-slate-900 mb-1">Your Member Benefits:</p>
                       <div className="flex items-center space-x-2">
                         <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
@@ -864,13 +1213,13 @@ export const AuthModal: React.FC = () => {
 
                     <div className="pt-3 border-t border-slate-200 flex items-center justify-between text-sm font-black text-slate-900">
                       <span>Total Amount:</span>
-                      <span className="text-lg text-pink-600">Membership</span>
+                      <span className="text-lg text-pink-600">₹{displayAmount}</span>
                     </div>
                   </div>
 
                   {/* Payment Options */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                    <label className="block text-sm font-bold text-slate-700 uppercase tracking-wider mb-2">
                       Payment Options (Sandbox Mode)
                     </label>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -886,7 +1235,7 @@ export const AuthModal: React.FC = () => {
                           key={method.id}
                           type="button"
                           onClick={() => setPaymentMethod(method.id)}
-                          className={`p-2.5 rounded-xl text-xs font-bold text-center border transition-all ${
+                          className={`p-2.5 rounded-xl text-sm font-bold text-center border transition-all ${
                             paymentMethod === method.id
                               ? 'border-pink-500 bg-pink-50 text-pink-700 shadow-xs'
                               : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
@@ -917,6 +1266,12 @@ export const AuthModal: React.FC = () => {
                     )}
                   </div>
 
+                  {(ctxErrorText || errorText) && (
+                    <p className="text-sm font-bold text-rose-600 bg-rose-50 p-2 rounded-lg border border-rose-200">
+                      {ctxErrorText || errorText}
+                    </p>
+                  )}
+
                   <div className="pt-2 flex items-center space-x-2">
                     <button
                       type="button"
@@ -942,7 +1297,8 @@ export const AuthModal: React.FC = () => {
                     </button>
                   </div>
                 </form>
-              )}
+                );
+              })()}
             </div>
           )}
         </div>

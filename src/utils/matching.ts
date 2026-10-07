@@ -2,10 +2,25 @@ import { Profile, BuddyProfile, CompatibilityScore, Activity } from '../types/da
 import { ACTIVITIES } from '../data/initialData';
 
 export function calculateCompatibility(
-  userProfile: Profile,
+  userProfile: Profile | null,
   buddyProfile: BuddyProfile,
   buddyUserProfile: Profile
 ): CompatibilityScore {
+  // Default score when userProfile is null (logged out)
+  if (!userProfile) {
+    return {
+      overallPercentage: 75,
+      locationScore: 10,
+      activitiesScore: 15,
+      interestsScore: 10,
+      availabilityScore: buddyProfile.is_online ? 15 : 12,
+      languageScore: 5,
+      explanation: `Check out ${buddyUserProfile.full_name}! Verified buddy with ${buddyProfile.review_count}+ reviews.`,
+      sharedActivities: [],
+      sharedLanguages: [],
+      sharedInterests: [],
+    };
+  }
   // 1. Location (30%)
   // Same city gives full 30 points, same area gives bonus affinity
   let locationScore = 0;

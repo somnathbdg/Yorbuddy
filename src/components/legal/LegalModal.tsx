@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   X,
   FileText,
@@ -9,13 +9,31 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
-export const LegalModal: React.FC = () => {
-  const { isLegalModalOpen, setIsLegalModalOpen, legalModalType } = useApp();
-  const [activeTab, setActiveTab] = useState<'terms' | 'privacy' | 'refund' | 'platonic'>(
-    legalModalType || 'terms'
-  );
+type LegalTab = 'terms' | 'privacy' | 'refund' | 'platonic';
 
-  if (!isLegalModalOpen) return null;
+const VALID_TABS: LegalTab[] = ['terms', 'privacy', 'refund', 'platonic'];
+
+export const LegalModal: React.FC = () => {
+  /*
+   * The modal is driven by the existing `legalPageSlug` navigation state:
+   * setting it to a section slug opens the modal on that section, and
+   * clearing it (null) closes the modal. This is the pre-existing frontend
+   * destination for legal content — the footer links route here rather than
+   * introducing new routes or endpoints.
+   */
+  const { legalPageSlug, setLegalPageSlug } = useApp();
+  const [activeTab, setActiveTab] = useState<LegalTab>('terms');
+
+  // Keep the visible tab in sync with the slug the caller navigated to.
+  useEffect(() => {
+    if (legalPageSlug && VALID_TABS.includes(legalPageSlug as LegalTab)) {
+      setActiveTab(legalPageSlug as LegalTab);
+    }
+  }, [legalPageSlug]);
+
+  if (!legalPageSlug) return null;
+
+  const close = () => setLegalPageSlug(null);
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200">
@@ -29,8 +47,9 @@ export const LegalModal: React.FC = () => {
             </h3>
           </div>
           <button
-            onClick={() => setIsLegalModalOpen(false)}
-            className="p-1.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
+            onClick={close}
+            aria-label="Close legal documentation"
+            className="p-1.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
           >
             <X className="w-5 h-5" />
           </button>
@@ -170,8 +189,8 @@ export const LegalModal: React.FC = () => {
         {/* Footer */}
         <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
           <button
-            onClick={() => setIsLegalModalOpen(false)}
-            className="px-6 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-bold"
+            onClick={close}
+            className="px-6 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2"
           >
             Close
           </button>
