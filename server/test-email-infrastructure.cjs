@@ -352,16 +352,24 @@ assert(
 // Test 15: Provider selection safety
 console.log('\n15. Provider Selection Safety');
 assert(
-  facade.includes("if (provider !== 'console' && env.NODE_ENV === 'production')"),
-  'Facade checks NODE_ENV for production'
+  facade.includes("if (provider === 'console')"),
+  'Facade supports console provider'
 );
 assert(
-  facade.includes("throw new Error(`Email provider '${provider}' is not yet implemented"),
-  'Facade throws for unimplemented providers in production'
+  facade.includes("else if (provider === 'sendgrid')"),
+  'Facade supports sendgrid provider'
 );
 assert(
   facade.includes("this.provider = new ConsoleEmailProvider()"),
   'Facade defaults to console provider'
+);
+assert(
+  facade.includes("this.provider = new SendGridEmailProvider()"),
+  'Facade uses SendGrid provider when configured'
+);
+assert(
+  facade.includes("Email provider '${provider}' is not supported"),
+  'Facade throws for unsupported providers'
 );
 
 // Test 16: Idempotency keys

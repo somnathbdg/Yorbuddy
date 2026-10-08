@@ -14,6 +14,7 @@
 
 import { EmailService, EmailResult, BookingEmailData, MembershipEmailData, KycEmailData, BuddyApplicationEmailData, SecurityNotificationData } from './emailService.js';
 import { ConsoleEmailProvider } from './consoleEmailProvider.js';
+import { SendGridEmailProvider } from './sendGridEmailProvider.js';
 import { getEmailQueue, QueuedEmail } from './emailQueue.js';
 import { env } from '../config/env.js';
 
@@ -21,16 +22,24 @@ import { env } from '../config/env.js';
 export type { EmailResult, BookingEmailData, MembershipEmailData, KycEmailData, BuddyApplicationEmailData, SecurityNotificationData } from './emailService.js';
 
 class EmailServiceFacade implements EmailService {
-  private provider: ConsoleEmailProvider;
+  private provider: ConsoleEmailProvider | SendGridEmailProvider;
   private queue: ReturnType<typeof getEmailQueue>;
 
   constructor() {
     // Validate provider configuration
     const provider = env.EMAIL_PROVIDER.toLowerCase();
-    if (provider !== 'console' && env.NODE_ENV === 'production') {
-      throw new Error(`Email provider '${provider}' is not yet implemented. Set EMAIL_PROVIDER=console for development.`);
+    
+    if (provider === 'console') {
+      this.provider = new ConsoleEmailProvider();
+    } else if (provider === 'sendgrid') {
+      this.provider = new SendGridEmailProvider();
+    } else {
+      throw new Error(
+        `Email provider '${provider}' is not supported. ` +
+        `Use EMAIL_PROVIDER=console for development or EMAIL_PROVIDER=sendgrid for production.`
+      );
     }
-    this.provider = new ConsoleEmailProvider();
+    
     this.queue = getEmailQueue();
   }
 
