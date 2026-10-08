@@ -363,7 +363,7 @@ console.log('\n=== Test 10: Frontend Integration ===\n');
 const authModal = readFile('../src/components/auth/AuthModal.tsx');
 
 // Check that Google button is on login page
-if (authModal.includes("window.location.href = '/api/auth/google'")) {
+if (authModal.includes('${API_BASE_URL}/auth/google')) {
   pass('Google Login button redirects to backend OAuth endpoint');
 } else {
   fail('Google Login button should redirect to backend OAuth endpoint');

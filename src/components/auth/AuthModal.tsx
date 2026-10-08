@@ -21,6 +21,7 @@ import {
 import { useApp } from '../../context/AppContext';
 import { authService } from '../../services/auth';
 import { membershipService } from '../../services/membership';
+import { API_BASE_URL } from '../../services/api';
 
 export const AuthModal: React.FC = () => {
   const {
@@ -670,7 +671,7 @@ export const AuthModal: React.FC = () => {
               <button
                 type="button"
                 onClick={() => {
-                  window.location.href = '/api/auth/google';
+                  window.location.href = `${API_BASE_URL}/auth/google`;
                 }}
                 className="w-full py-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold text-sm flex items-center justify-center space-x-2 transition-colors"
               >
@@ -908,7 +909,7 @@ export const AuthModal: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => {
-                      window.location.href = '/api/auth/google';
+                      window.location.href = `${API_BASE_URL}/auth/google`;
                     }}
                     className="w-full py-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold text-sm flex items-center justify-center space-x-2 transition-colors"
                   >
