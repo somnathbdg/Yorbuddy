@@ -236,7 +236,7 @@ export const AuthModal: React.FC = () => {
 
   const handleStep3Submit = (e: React.FormEvent) => {
     e.preventDefault();
-    // All plans (including TRIAL_1D) require payment — proceed to Step 4
+    // All plans (except FREE_ACCESS_10D) require payment — proceed to Step 4
     setRegisterStep(4);
   };
 
@@ -1148,18 +1148,20 @@ export const AuthModal: React.FC = () => {
 
               {/* STEP 4: Membership Payment Page */}
               {registerStep === 4 && (() => {
-                // Derive amount from pendingMembershipPlan; default to TRIAL_1D ₹99
+                // Derive amount from pendingMembershipPlan; default to WEEK_1 ₹499
                 const planPriceMap: Record<string, number> = {
+                  FREE_ACCESS_10D: 0,
                   TRIAL_1D: 99,
                   WEEK_1: 499,
                   MONTH_1: 1999,
                 };
                 const planNameMap: Record<string, string> = {
+                  FREE_ACCESS_10D: 'Free Access',
                   TRIAL_1D: '1 Day Access',
                   WEEK_1: '1 Week',
                   MONTH_1: '1 Month',
                 };
-                const displayPlan = pendingMembershipPlan ?? 'TRIAL_1D';
+                const displayPlan = pendingMembershipPlan ?? 'WEEK_1';
                 const displayAmount = planPriceMap[displayPlan] ?? 99;
                 const displayPlanName = planNameMap[displayPlan] ?? 'Membership';
 

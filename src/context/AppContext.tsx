@@ -444,8 +444,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const activateMembership = (method: 'upi' | 'credit_card' | 'debit_card' | 'net_banking') => {
     // Use the real backend membership API — NOT local mock state.
-    // Default to TRIAL_1D (₹99) for registration flow; use pendingMembershipPlan if set.
-    const planId = pendingMembershipPlan ?? 'TRIAL_1D';
+    // Default to WEEK_1 (₹499) for registration flow; use pendingMembershipPlan if set.
+    // Note: FREE_ACCESS_10D is auto-assigned on registration and does not need payment.
+    const planId = pendingMembershipPlan ?? 'WEEK_1';
 
     setIsProcessingPayment(true);
     setErrorText('');

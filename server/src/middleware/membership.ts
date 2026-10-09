@@ -12,8 +12,9 @@ import { checkUserMembership } from '../services/membershipService.js';
  *  - There is a memberships row with status='success'
  *  - AND (expiry_date IS NULL OR expiry_date > NOW())
  *
- * The free trial (TRIAL_1D plan) is a paid plan (₹99) and counts as a
- * verified paid membership once its Razorpay payment has been confirmed.
+ * The FREE_ACCESS_10D plan is auto-assigned on registration (₹0, 10 days).
+ * Paid plans (TRIAL_1D ₹99, WEEK_1 ₹499, MONTH_1 ₹1,999) count as
+ * verified paid membership once their Razorpay payment has been confirmed.
  */
 export async function requireMembership(req: Request, _res: Response, next: NextFunction): Promise<void> {
   try {

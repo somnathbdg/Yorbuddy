@@ -3,6 +3,7 @@ import { getSupabase } from '../config/database.js';
 import { hashPassword, verifyPassword } from '../utils/password.js';
 import { generateAccessToken, generateRefreshToken, verifyRefreshToken } from '../utils/jwt.js';
 import { Conflict, Unauthorized, BadRequest } from '../middleware/errorHandler.js';
+import { assignFreeAccess } from './membershipService.js';
 import { z } from 'zod';
 
 // ========== Input Validation Schemas ==========
@@ -135,13 +136,16 @@ export async function register(req: Request, res: Response, next: NextFunction):
     const refreshExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     await storeRefreshToken(newUser.id, tokenId, refreshExpires, req);
 
+    // Auto-assign 10-day free access membership
+    await assignFreeAccess(supabase, newUser.id);
+
     res.status(201).json({
       data: {
         user: sanitizeUser(newUser),
         accessToken,
         refreshToken,
       },
-      message: 'Registration successful',
+      message: 'Registration successful. 10-day Free Access has been activated.',
     });
   } catch (err) {
     next(err);

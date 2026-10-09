@@ -30,6 +30,7 @@ function getRazorpay(): any {
 // but historical records are preserved.
 
 const PLANS = {
+  FREE_ACCESS_10D: { id: 'FREE_ACCESS_10D', name: 'Free Access', amount: 0, period: '10 days' },
   TRIAL_1D: { id: 'TRIAL_1D', name: '1 Day Access', amount: 9900, period: '1 day' },
   WEEK_1: { id: 'WEEK_1', name: '1 Week', amount: 49900, period: '7 days' },
   MONTH_1: { id: 'MONTH_1', name: '1 Month', amount: 199900, period: '30 days' },
@@ -70,6 +71,8 @@ type PlanId = keyof typeof PLANS;
 
 // ========== Validation Schemas ==========
 
+// Only these plans can be purchased via create-order.
+// FREE_ACCESS_10D is auto-assigned on registration and cannot be purchased.
 const createOrderSchema = z.object({
   plan_id: z.enum(['TRIAL_1D', 'WEEK_1', 'MONTH_1']),
 }).strict();
@@ -90,21 +93,23 @@ function calculateExpiry(planId: PlanId, start: Date): Date | null {
   const plan = PLANS[planId];
   if (!plan) return null;
   const d = new Date(start);
-  if (plan.period === '1 day') d.setDate(d.getDate() + 1);
+  if (plan.period === '10 days') d.setDate(d.getDate() + 10);
+  else if (plan.period === '1 day') d.setDate(d.getDate() + 1);
   else if (plan.period === '7 days') d.setDate(d.getDate() + 7);
   else if (plan.period === '30 days') d.setDate(d.getDate() + 30);
   return d;
 }
 
 /**
- * Check if user has already used their one-time trial
+ * Check if user has already used their one-time trial or free access.
+ * Both TRIAL_1D and FREE_ACCESS_10D are one-time offers per user.
  */
 export async function hasUserUsedTrial(supabase: any, userId: string): Promise<boolean> {
   const { data, error } = await supabase
     .from('memberships')
     .select('id')
     .eq('user_id', userId)
-    .eq('plan_id', 'TRIAL_1D')
+    .in('plan_id', ['TRIAL_1D', 'FREE_ACCESS_10D'])
     .limit(1);
 
   if (error) return false;
@@ -112,6 +117,44 @@ export async function hasUserUsedTrial(supabase: any, userId: string): Promise<b
 }
 
 // ========== Controllers ==========
+
+/**
+ * Assign 10-day free access to a user.
+ * This is called automatically on registration.
+ * Enforces one-time rule: if user already has FREE_ACCESS_10D, skip.
+ */
+export async function assignFreeAccess(supabase: any, userId: string): Promise<void> {
+  // Check if user already has free access
+  const { data: existing } = await supabase
+    .from('memberships')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('plan_id', 'FREE_ACCESS_10D')
+    .limit(1);
+
+  if (existing && existing.length > 0) return;
+
+  // Create free access membership
+  const start = new Date();
+  const expiry = new Date(start);
+  expiry.setDate(expiry.getDate() + 10);
+
+  await supabase.from('memberships').insert({
+    user_id: userId,
+    plan_id: 'FREE_ACCESS_10D',
+    amount: 0,
+    currency: 'INR',
+    status: 'success',
+    membership_start_date: start.toISOString(),
+    membership_expiry_date: expiry.toISOString(),
+  });
+
+  // Mark user's free trial as used
+  await supabase
+    .from('users')
+    .update({ free_trial_used: true })
+    .eq('id', userId);
+}
 
 export async function createMembershipOrder(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {

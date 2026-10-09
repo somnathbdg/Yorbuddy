@@ -30,23 +30,24 @@ if (!securityTs.includes('keyGenerator')) {
   process.exit(1);
 }
 
-// Extract the keyGenerator function body from the source
-// The keyGenerator is defined as:
-//   keyGenerator: (req: Request) => {
-//     const forwarded = req.headers['x-forwarded-for'];
-//     if (typeof forwarded === 'string' && forwarded.length > 0) {
-//       const firstIp = forwarded.split(',')[0].trim();
-//       if (firstIp) return firstIp;
-//     }
-//     return req.ip || 'unknown';
-//   },
-const keyGeneratorStart = securityTs.indexOf('keyGenerator:');
-const keyGeneratorBodyStart = securityTs.indexOf('{', keyGeneratorStart);
-const keyGeneratorBodyEnd = securityTs.indexOf('},', keyGeneratorBodyStart);
-const keyGeneratorBody = securityTs.substring(keyGeneratorBodyStart + 1, keyGeneratorBodyEnd);
+// Extract the getClientKey function body from the source
+// The getClientKey function contains the actual IP extraction logic
+const getClientKeyStart = securityTs.indexOf('function getClientKey');
+const getClientKeyBodyStart = securityTs.indexOf('{', getClientKeyStart);
+// Find the matching closing brace by counting braces
+let braceCount = 1;
+let getClientKeyBodyEnd = getClientKeyBodyStart + 1;
+while (braceCount > 0 && getClientKeyBodyEnd < securityTs.length) {
+  const ch = securityTs[getClientKeyBodyEnd];
+  if (ch === '{') braceCount++;
+  if (ch === '}') braceCount--;
+  getClientKeyBodyEnd++;
+}
+// Extract just the inner body (without the outer braces)
+const getClientKeyBody = securityTs.substring(getClientKeyBodyStart + 1, getClientKeyBodyEnd - 1);
 
 // Create a function from the extracted body
-const keyGenerator = new Function('req', keyGeneratorBody);
+const keyGenerator = new Function('req', getClientKeyBody);
 
 // Helper to create a mock request
 function mockRequest(ip, forwardedFor) {

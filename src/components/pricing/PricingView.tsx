@@ -28,7 +28,26 @@ interface PricingPlan {
 
 const plans: PricingPlan[] = [
   {
-    id: 'trial-1d',
+    id: 'free-access-10d',
+    name: 'Free Access',
+    price: '₹0',
+    period: 'for 10 days',
+    badge: 'FREE',
+    badgeColor: 'bg-green-100 text-green-700',
+    features: [
+      'Browse verified companions',
+      'Filter by activity & city',
+      'View buddy profiles',
+      'Explore the platform',
+      'No payment required',
+    ],
+    cta: 'Start Free Access',
+    icon: <Sparkles className="w-5 h-5" />,
+    apiPlanId: 'FREE_ACCESS_10D',
+    accessType: 'limited',
+  },
+  {
+    id: '1-day',
     name: '1 Day Access',
     price: '₹99',
     period: 'for 1 day',
@@ -54,7 +73,7 @@ const plans: PricingPlan[] = [
     badge: 'FULL ACCESS',
     badgeColor: 'bg-emerald-100 text-emerald-700',
     features: [
-      'Everything in 1 Day Access',
+      'Everything in Free Access',
       'Send booking requests',
       'In-app chat after booking',
       'Priority support',
@@ -100,6 +119,26 @@ export const PricingView: React.FC = () => {
     fetchApiMembership();
   }, [fetchApiMembership]);
 
+  const handleFreeAccess = async () => {
+    // FREE_ACCESS_10D is auto-assigned on registration — no payment needed.
+    if (!currentUser || !currentUser.id) {
+      setAuthMode('register');
+      setIsRegisterModalOpen(true);
+      return;
+    }
+    // Logged in: check if free access is already active (backend is authority)
+    try {
+      await fetchApiMembership();
+      if (apiMembership?.is_active && apiMembership.plan_id === 'FREE_ACCESS_10D') {
+        setMembershipSuccess(true);
+      } else {
+        setMembershipError('Your Free Access has expired or is not active. Please choose a paid plan.');
+      }
+    } catch {
+      setMembershipError('Unable to verify your Free Access status. Please try again.');
+    }
+  };
+
   const handleTrialPayment = async () => {
     // TRIAL_1D is a PAID ₹99 plan — use the same Razorpay flow as all other plans.
     setMembershipError(null);
@@ -109,16 +148,15 @@ export const PricingView: React.FC = () => {
     if (!trialPlan) return;
 
     if (!currentUser || !currentUser.id) {
-      // Open registration modal for logged-out users
       setPendingMembershipPlan('TRIAL_1D');
       setAuthMode('register');
       setIsRegisterModalOpen(true);
       return;
     }
 
-    // Logged-in user: go directly through Razorpay payment
     await handleMembershipPayment(trialPlan);
   };
+
 
   const handleMembershipPayment = async (plan: PricingPlan) => {
     setMembershipError(null);
@@ -223,7 +261,7 @@ export const PricingView: React.FC = () => {
               <div className="inline-flex flex-col items-center bg-gradient-to-br from-emerald-50 to-teal-50 border-2 border-emerald-200 rounded-2xl px-8 py-4 shadow-sm">
                 <span className="text-xs font-bold text-emerald-600 uppercase tracking-wider mb-1">Active Membership</span>
                 <span className="text-2xl font-black text-slate-900">
-                  {activePlanId === 'TRIAL_1D' ? '1 Day Access' : activePlanId === 'WEEK_1' ? '1 Week' : activePlanId === 'MONTH_1' ? '1 Month' : activePlanId}
+                  {activePlanId === 'FREE_ACCESS_10D' ? 'Free Access' : activePlanId === 'WEEK_1' ? '1 Week' : activePlanId === 'MONTH_1' ? '1 Month' : activePlanId}
                 </span>
                 <span className="text-sm text-slate-500 mt-1">₹{apiMembership?.amount} Paid</span>
                 <span className={`text-xs font-bold mt-2 px-3 py-1 rounded-full ${
@@ -251,14 +289,14 @@ export const PricingView: React.FC = () => {
         <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
             <div className="flex items-center space-x-3 mb-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl bg-green-100 text-green-600 flex items-center justify-center">
                 <Lock className="w-5 h-5" />
               </div>
-              <h3 className="text-lg font-black text-slate-900">1 Day Access</h3>
-              </div>
-              <p className="text-sm text-slate-600 leading-relaxed">
-                Try YorBuddy for ₹99 for 1 day with limited access. Payment required.
-              </p>
+              <h3 className="text-lg font-black text-slate-900">Free Access</h3>
+            </div>
+            <p className="text-sm text-slate-600 leading-relaxed">
+              Get 10 days of free access with limited features. No payment required.
+            </p>
           </div>
 
           <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
@@ -277,7 +315,7 @@ export const PricingView: React.FC = () => {
         {/* Access Notice */}
         <div className="max-w-2xl mx-auto p-4 rounded-2xl bg-blue-50 border border-blue-200 text-center">
           <p className="text-base font-bold text-blue-800">
-            <span className="text-amber-600">1 Day Access = Paid Access</span>
+            <span className="text-green-600">Free Access = 10 Days</span>
             <span className="mx-2">|</span>
             <span className="text-emerald-600">Paid Membership = Full Access</span>
           </p>
@@ -362,12 +400,20 @@ export const PricingView: React.FC = () => {
                     <span>Your Current Plan</span>
                     <CheckCircle2 className="w-4 h-4" />
                   </button>
-                ) : activePlanId === 'TRIAL_1D' && plan.apiPlanId === 'TRIAL_1D' ? (
+                ) : activePlanId === 'FREE_ACCESS_10D' && plan.apiPlanId === 'FREE_ACCESS_10D' ? (
                   <button
                     disabled
                     className="w-full py-3.5 rounded-2xl font-black text-base shadow-lg flex items-center justify-center space-x-2 bg-slate-100 text-slate-500 cursor-not-allowed"
                   >
                     <span>Access Active — Cannot Repurchase</span>
+                  </button>
+                ) : plan.apiPlanId === 'FREE_ACCESS_10D' ? (
+                  <button
+                    onClick={handleFreeAccess}
+                    className="w-full py-3.5 rounded-2xl font-black text-base shadow-lg transition-opacity flex items-center justify-center space-x-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-green-500/25 hover:opacity-95"
+                  >
+                    <span>Start Free Access</span>
+                    <ArrowRight className="w-4 h-4" />
                   </button>
                 ) : plan.apiPlanId === 'TRIAL_1D' ? (
                   <button
@@ -400,7 +446,7 @@ export const PricingView: React.FC = () => {
         {/* Bottom Notice */}
         <div className="max-w-2xl mx-auto text-center">
           <p className="text-base text-slate-500 font-medium">
-            Payment is required for the 1 Day Access. Paid membership provides full access.
+            Free Access is automatically activated on registration. Paid membership provides full access.
           </p>
         </div>
 
@@ -428,10 +474,10 @@ export const PricingView: React.FC = () => {
 
           <div className="bg-white rounded-2xl p-5 border border-slate-200 space-y-1 text-xs">
             <span className="font-bold text-slate-900 block text-sm">
-              What does 1 Day Access include?
+              What does Free Access include?
             </span>
             <p className="text-slate-600 leading-relaxed">
-              1 Day Access gives you limited access to browse verified companions, filter by activity and city, view buddy profiles, and explore the platform. To unlock full access including booking requests and in-app chat, you need a paid membership.
+              Free Access gives you limited access to browse verified companions, filter by activity and city, view buddy profiles, and explore the platform. To unlock full access including booking requests and in-app chat, you need a paid membership.
             </p>
           </div>
 

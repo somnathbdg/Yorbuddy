@@ -3,7 +3,31 @@ import helmet from 'helmet';
 import cors from 'cors';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
+import crypto from 'crypto';
 import { env } from '../config/env.js';
+
+/**
+ * Create a privacy-safe fingerprint of a client key (e.g., IP address).
+ * Uses SHA-256 and returns only the first 12 hex characters.
+ * This is a one-way hash, so the original IP cannot be recovered.
+ */
+function fingerprintKey(key: string): string {
+  return crypto.createHash('sha256').update(key).digest('hex').slice(0, 12);
+}
+
+/**
+ * Extract the client IP from the request.
+ * Reads the first value from X-Forwarded-For (added by the first proxy,
+ * not client-spoofable). Falls back to req.ip when header is missing.
+ */
+function getClientKey(req: Request): string {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string' && forwarded.length > 0) {
+    const firstIp = forwarded.split(',')[0].trim();
+    if (firstIp) return firstIp;
+  }
+  return req.ip || 'unknown';
+}
 
 /**
  * Helmet: sets security headers (X-Content-Type-Options, X-Frame-Options, etc.)
@@ -63,19 +87,17 @@ export const authLimiter = rateLimit({
   max: process.env.NODE_ENV === 'production' ? 5 : 100, // Relaxed for development/testing
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req: Request) => {
-    const forwarded = req.headers['x-forwarded-for'];
-    if (typeof forwarded === 'string' && forwarded.length > 0) {
-      const firstIp = forwarded.split(',')[0].trim();
-      if (firstIp) return firstIp;
-    }
-    return req.ip || 'unknown';
-  },
-  message: {
-    error: {
-      code: 'RATE_LIMIT_EXCEEDED',
-      message: 'Too many attempts, please try again later.',
-    },
+  keyGenerator: (req: Request) => getClientKey(req),
+  handler: (req: Request, res: Response) => {
+    const key = getClientKey(req);
+    const fp = fingerprintKey(key);
+    console.error(`[RATE_LIMIT] authLimiter rejection: route=${req.method} ${req.path} fingerprint=${fp}`);
+    res.status(429).json({
+      error: {
+        code: 'RATE_LIMIT_EXCEEDED',
+        message: 'Too many attempts, please try again later.',
+      },
+    });
   },
 });
 

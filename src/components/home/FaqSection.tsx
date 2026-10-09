@@ -25,8 +25,8 @@ const faqItems: FaqItem[] = [
     answer: 'We offer three plans: ₹99 for 1 Day (limited access), ₹499 for 1 Week (full access), and ₹1,999 for 1 Month (full access). All plans are one-time payments with no recurring charges.',
   },
   {
-    question: 'Is the ₹99 trial free?',
-    answer: 'No. The ₹99 1-Day Access requires payment. It provides limited access to browse verified companions, filter by activity and city, view buddy profiles, and explore the platform.',
+    question: 'Is the Free Access really free?',
+    answer: 'Yes. The Free Access plan is completely free for 10 days with no payment required. It provides limited access to browse verified companions, filter by activity and city, view buddy profiles, and explore the platform.',
   },
   {
     question: 'Can I become a Buddy?',
