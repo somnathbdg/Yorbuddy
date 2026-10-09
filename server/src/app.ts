@@ -26,6 +26,11 @@ import { telegramWebhookRouter, telegramAdminRouter } from './routes/telegram.js
 export function createApp(): Express {
   const app = express();
 
+  // Trust Render's reverse proxy so req.ip reflects the real client IP.
+  // Without this, all users appear from the same proxy IP and share
+  // a single rate-limit bucket (authLimiter: 5 req/10 min).
+  app.set('trust proxy', 1);
+
   // Security middleware
   app.use(helmetMiddleware);
   app.use(corsMiddleware);
