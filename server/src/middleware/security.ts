@@ -51,12 +51,26 @@ export const apiLimiter = rateLimit({
 /**
  * Stricter rate limiter for auth endpoints.
  * 5 requests per 10 minutes per IP.
+ *
+ * Uses a custom keyGenerator that reads the first value from X-Forwarded-For.
+ * This is necessary because Render's proxy chain has multiple hops, and
+ * trust proxy: 1 only trusts the first proxy. The first value in
+ * X-Forwarded-For is always added by the first proxy (not the client),
+ * so it cannot be spoofed by the client.
  */
 export const authLimiter = rateLimit({
   windowMs: 10 * 60 * 1000, // 10 minutes
   max: process.env.NODE_ENV === 'production' ? 5 : 100, // Relaxed for development/testing
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req: Request) => {
+    const forwarded = req.headers['x-forwarded-for'];
+    if (typeof forwarded === 'string' && forwarded.length > 0) {
+      const firstIp = forwarded.split(',')[0].trim();
+      if (firstIp) return firstIp;
+    }
+    return req.ip || 'unknown';
+  },
   message: {
     error: {
       code: 'RATE_LIMIT_EXCEEDED',
