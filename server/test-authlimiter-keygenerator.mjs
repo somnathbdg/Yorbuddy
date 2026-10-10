@@ -106,9 +106,6 @@ const authEndpoints = [
   { route: authRoute, path: "router.post('/refresh', authLimiter" },
   { route: authRoute, path: "router.post('/forgot-password', authLimiter" },
   { route: authRoute, path: "router.post('/reset-password', authLimiter" },
-  { route: googleAuthRoute, path: "router.get('/', authLimiter" },
-  { route: googleAuthRoute, path: "router.get('/callback', authLimiter" },
-  { route: googleAuthRoute, path: "router.post('/exchange', authLimiter" },
 ];
 
 for (const endpoint of authEndpoints) {
@@ -119,7 +116,27 @@ for (const endpoint of authEndpoints) {
   }
 }
 
-// ========== TEST 7: No security weakened ==========
+// Note: Google OAuth routes now use oauthLimiter, not authLimiter (Option B)
+// Verified in Test 6b below
+
+// ========== Test 6b: oauthLimiter is applied to Google OAuth routes ==========
+console.log('\n=== Test 6b: oauthLimiter is applied to Google OAuth routes ===\n');
+
+const oauthEndpoints = [
+  { route: googleAuthRoute, path: "router.get('/', oauthLimiter" },
+  { route: googleAuthRoute, path: "router.get('/callback', oauthLimiter" },
+  { route: googleAuthRoute, path: "router.post('/exchange', oauthLimiter" },
+];
+
+for (const endpoint of oauthEndpoints) {
+  if (endpoint.route.includes(endpoint.path)) {
+    pass(`oauthLimiter applied to ${endpoint.path}`);
+  } else {
+    fail(`oauthLimiter should be applied to ${endpoint.path}`);
+  }
+}
+
+// ========== TEST 7: No security weakened =========
 console.log('\n=== Test 7: No security weakened ===\n');
 
 if (securityTs.includes('apiLimiter')) {

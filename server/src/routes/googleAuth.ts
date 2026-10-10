@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { generateGoogleAuthUrl, handleGoogleCallback, isGoogleOAuthConfigured, storePendingAuth, retrievePendingAuth } from '../services/googleAuthService.js';
-import { authLimiter } from '../middleware/security.js';
+import { oauthLimiter } from '../middleware/security.js';
 
 const router = Router();
 
@@ -10,7 +10,7 @@ const router = Router();
  * 
  * Rate limited by authLimiter (5 req/10 min per IP in production).
  */
-router.get('/', authLimiter, async (_req: Request, res: Response) => {
+router.get('/', oauthLimiter, async (_req: Request, res: Response) => {
   try {
     if (!isGoogleOAuthConfigured()) {
       return res.status(503).json({
@@ -41,7 +41,7 @@ router.get('/', authLimiter, async (_req: Request, res: Response) => {
  * 
  * Rate limited by authLimiter (5 req/10 min per IP in production).
  */
-router.get('/callback', authLimiter, async (req: Request, res: Response) => {
+router.get('/callback', oauthLimiter, async (req: Request, res: Response) => {
   try {
     if (!isGoogleOAuthConfigured()) {
       return res.status(503).json({
@@ -93,7 +93,7 @@ router.get('/callback', authLimiter, async (req: Request, res: Response) => {
  * Exchanges a one-time code for auth tokens.
  * Code is single-use and expires after 60 seconds.
  */
-router.post('/exchange', authLimiter, async (req: Request, res: Response) => {
+router.post('/exchange', oauthLimiter, async (req: Request, res: Response) => {
   try {
     const { code } = req.body;
     if (!code) {

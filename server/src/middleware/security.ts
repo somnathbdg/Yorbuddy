@@ -102,6 +102,32 @@ export const authLimiter = rateLimit({
 });
 
 /**
+ * Rate limiter for Google OAuth endpoints.
+ * 10 requests per 10 minutes per IP in production.
+ *
+ * Uses the same keyGenerator (getClientKey) and fingerprinting as authLimiter.
+ * Separate from authLimiter so OAuth retries don't consume registration/login attempts.
+ */
+export const oauthLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000, // 10 minutes
+  max: process.env.NODE_ENV === 'production' ? 10 : 100, // Relaxed for development/testing
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: Request) => getClientKey(req),
+  handler: (req: Request, res: Response) => {
+    const key = getClientKey(req);
+    const fp = fingerprintKey(key);
+    console.error(`[RATE_LIMIT] oauthLimiter rejection: route=${req.method} ${req.path} fingerprint=${fp}`);
+    res.status(429).json({
+      error: {
+        code: 'RATE_LIMIT_EXCEEDED',
+        message: 'Too many attempts, please try again later.',
+      },
+    });
+  },
+});
+
+/**
  * Rate limiter for verification/OTP endpoints.
  * 5 requests per 10 minutes per IP in production.
  * Prevents brute-force of 6-digit codes when an attacker has a valid JWT.
