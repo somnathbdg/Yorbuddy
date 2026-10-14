@@ -252,6 +252,72 @@ assert(pricingView.includes('apiMembership?.is_active'), 'frontend gates on is_a
 assert(userDashboard.includes("'Free Access'"), 'UserDashboard shows "Free Access"');
 assert(header.includes("'Free Access'"), 'Header shows "Free Access"');
 
+// ---------------------------------------------------------------------------
+console.log('\n=== Test 11: Avatar photo_url handling ===\n');
+
+// New user with picture: photo_url saved from Google
+assert(
+  googleAuthService.includes('photo_url: googleUser.picture || null'),
+  'new user insert includes photo_url from Google'
+);
+
+// New user without picture: photo_url is null (fallback avatar)
+assert(
+  /photo_url:\s*googleUser\.picture\s*\|\|\s*null/.test(googleAuthService),
+  'new user without picture gets null photo_url (fallback avatar works)'
+);
+
+// Existing user linking Google: only updates photo_url when picture exists
+assert(
+  googleAuthService.includes('...(googleUser.picture ? { photo_url: googleUser.picture } : {})'),
+  'link existing user: photo_url only updated when Google returns a picture'
+);
+
+// Existing user login: refreshes photo_url when Google returns new picture
+assert(
+  /if\s*\(googleUser\.picture\s*&&\s*existingByGoogleId\.photo_url\s*!==\s*googleUser\.picture\)/.test(googleAuthService),
+  'login refresh: photo_url updated when Google picture differs'
+);
+
+// Existing user login: preserves photo_url when Google returns no picture
+assert(
+  /if\s*\(googleUser\.picture\s*&&/.test(googleAuthService),
+  'login refresh: photo_url preserved when Google returns no picture'
+);
+
+// OAuth callback response includes photo_url
+assert(
+  /photo_url:\s*user\.photo_url\s*\|\|\s*null/.test(googleAuthService),
+  'OAuth callback response includes photo_url'
+);
+
+// sanitizeUser includes photo_url
+assert(
+  authService.includes('photo_url: user.photo_url || null'),
+  'sanitizeUser includes photo_url'
+);
+
+// Two different users: photo_url is per-user (no shared state)
+assert(
+  !googleAuthService.includes('photo_url: "https://'),
+  'no hardcoded photo URL in googleAuthService'
+);
+assert(
+  !googleAuthService.includes("photo_url: 'https://"),
+  'no hardcoded photo URL in googleAuthService (single quotes)'
+);
+
+// Frontend fallback avatar exists
+const photoUtil = read('../src/utils/photo.ts');
+assert(
+  photoUtil.includes('FALLBACK_AVATAR'),
+  'frontend has fallback avatar for users without photo'
+);
+assert(
+  photoUtil.includes('export function getPhotoUrl'),
+  'frontend getPhotoUrl helper exists'
+);
+
 console.log('\n=== MEMBERSHIP TEST SUMMARY ===');
 console.log(`  Passed: ${passed}`);
 console.log(`  Failed: ${failed}`);

@@ -85,6 +85,7 @@ function sanitizeUser(user: any) {
     membership_paid_at: user.membership_paid_at,
     created_at: user.created_at,
     updated_at: user.updated_at,
+    photo_url: user.photo_url || null,
   };
 }
 

@@ -322,6 +322,16 @@ async function findOrCreateUser(googleUser: GoogleUserInfo): Promise<{ user: any
     .single();
 
   if (existingByGoogleId && !googleIdError) {
+    // Refresh photo_url from Google on every login
+    if (googleUser.picture && existingByGoogleId.photo_url !== googleUser.picture) {
+      const { data: updated } = await supabase
+        .from('users')
+        .update({ photo_url: googleUser.picture })
+        .eq('id', existingByGoogleId.id)
+        .select()
+        .single();
+      return { user: updated || existingByGoogleId, isNewUser: false };
+    }
     return { user: existingByGoogleId, isNewUser: false };
   }
 
@@ -336,7 +346,7 @@ async function findOrCreateUser(googleUser: GoogleUserInfo): Promise<{ user: any
     // Link Google account to existing user
     const { data: linkedUser, error: linkError } = await supabase
       .from('users')
-      .update({ google_id: googleUser.sub })
+      .update({ google_id: googleUser.sub, ...(googleUser.picture ? { photo_url: googleUser.picture } : {}) })
       .eq('id', existingByEmail.id)
       .select()
       .single();
@@ -359,6 +369,7 @@ async function findOrCreateUser(googleUser: GoogleUserInfo): Promise<{ user: any
       is_active: true,
       is_membership_paid: false,
       email_verified_at: googleUser.email_verified ? new Date().toISOString() : null,
+      photo_url: googleUser.picture || null,
     })
     .select()
     .single();
@@ -458,6 +469,7 @@ export async function handleGoogleCallback(
       is_active: user.is_active,
       is_membership_paid: user.is_membership_paid,
       created_at: user.created_at,
+      photo_url: user.photo_url || null,
     },
     accessToken,
     refreshToken,
