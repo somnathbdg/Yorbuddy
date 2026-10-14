@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal, flushSync } from 'react-dom';
 import {
   X,
   CheckCircle2,
@@ -22,6 +23,7 @@ import { useApp } from '../../context/AppContext';
 import { authService } from '../../services/auth';
 import { membershipService } from '../../services/membership';
 import { API_BASE_URL } from '../../services/api';
+import { OAuthRedirectOverlay } from './GoogleAuthScreens';
 
 export const AuthModal: React.FC = () => {
   const {
@@ -118,6 +120,25 @@ export const AuthModal: React.FC = () => {
   const [errorText, setErrorText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
+  // Pre-redirect overlay for the Google OAuth hand-off. The click handler below
+  // paints it and then navigates immediately — the navigation is never delayed,
+  // intercepted or turned into a popup/iframe.
+  const [isRedirectingToGoogle, setIsRedirectingToGoogle] = useState(false);
+
+  const handleGoogleSignIn = () => {
+    // flushSync commits the overlay to the DOM before we leave the page, so the
+    // user sees the branded screen instead of a frozen modal while the backend
+    // (or Render's cold-start proxy) answers. No timers, no deferred work.
+    //
+    // The modal is deliberately left open behind the (opaque) overlay: if the
+    // navigation never completes, "Cancel and go back" returns the user to the
+    // login form instead of dumping them on the homepage.
+    flushSync(() => {
+      setIsRedirectingToGoogle(true);
+    });
+    window.location.href = `${API_BASE_URL}/auth/google`;
+  };
+
   // Listen for auth expired events
   useEffect(() => {
     const handleAuthExpired = () => {
@@ -143,6 +164,15 @@ export const AuthModal: React.FC = () => {
       }
     }
   }, [isRegisterModalOpen, authMode, currentUser]);
+
+  // Safety net: if the overlay is somehow up while the modal is closed, still
+  // render the overlay on its own.
+  if (isRedirectingToGoogle && !isRegisterModalOpen) {
+    return createPortal(
+      <OAuthRedirectOverlay onCancel={() => setIsRedirectingToGoogle(false)} />,
+      document.body,
+    );
+  }
 
   if (!isRegisterModalOpen) return null;
 
@@ -670,9 +700,7 @@ export const AuthModal: React.FC = () => {
               {/* Google Login Button */}
               <button
                 type="button"
-                onClick={() => {
-                  window.location.href = `${API_BASE_URL}/auth/google`;
-                }}
+                onClick={handleGoogleSignIn}
                 className="w-full py-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold text-sm flex items-center justify-center space-x-2 transition-colors"
               >
                 <Chrome className="w-5 h-5 text-blue-500" />
@@ -908,9 +936,7 @@ export const AuthModal: React.FC = () => {
                   {/* Google Sign Up Button */}
                   <button
                     type="button"
-                    onClick={() => {
-                      window.location.href = `${API_BASE_URL}/auth/google`;
-                    }}
+                    onClick={handleGoogleSignIn}
                     className="w-full py-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold text-sm flex items-center justify-center space-x-2 transition-colors"
                   >
                     <Chrome className="w-5 h-5 text-blue-500" />
@@ -1306,6 +1332,14 @@ export const AuthModal: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Pre-redirect overlay. Rendered as a portal so it is never clipped by the
+          modal, and left in place until the browser actually navigates away. */}
+      {isRedirectingToGoogle &&
+        createPortal(
+          <OAuthRedirectOverlay onCancel={() => setIsRedirectingToGoogle(false)} />,
+          document.body,
+        )}
     </div>
   );
 };

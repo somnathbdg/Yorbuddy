@@ -21,10 +21,14 @@ function getRazorpay(): any {
 }
 
 // ========== Pricing Plans ==========
-// NEW FINAL PRICING:
-// TRIAL_1D: ₹99 (9900 paise), 1 day, Razorpay required
-// WEEK_1: ₹499 (49900 paise), 7 days
-// MONTH_1: ₹1999 (199900 paise), 30 days
+// FINAL PRICING (authoritative — frontend mirrors these values):
+// FREE_ACCESS_10D: ₹0 (0 paise), 10 days — auto-assigned once per account, NOT purchasable
+// TRIAL_1D: ₹99 (9900 paise), 1 day, Razorpay required — PAID and REPEATABLE
+// WEEK_1: ₹499 (49900 paise), 7 days — PAID and REPEATABLE
+// MONTH_1: ₹1999 (199900 paise), 30 days — PAID and REPEATABLE
+//
+// No paid plan is gated on prior free access or prior purchases. Every
+// purchase requires a fresh Razorpay payment.
 //
 // OLD PLANS (FREE_TRIAL, MONTH_6, YEAR_1, LIFETIME) are NO LONGER PURCHASABLE
 // but historical records are preserved.
@@ -100,31 +104,25 @@ function calculateExpiry(planId: PlanId, start: Date): Date | null {
   return d;
 }
 
-/**
- * Check if user has already used their one-time trial or free access.
- * Both TRIAL_1D and FREE_ACCESS_10D are one-time offers per user.
- */
-export async function hasUserUsedTrial(supabase: any, userId: string): Promise<boolean> {
-  const { data, error } = await supabase
-    .from('memberships')
-    .select('id')
-    .eq('user_id', userId)
-    .in('plan_id', ['TRIAL_1D', 'FREE_ACCESS_10D'])
-    .limit(1);
-
-  if (error) return false;
-  return data && data.length > 0;
-}
-
 // ========== Controllers ==========
 
 /**
- * Assign 10-day free access to a user.
- * This is called automatically on registration.
- * Enforces one-time rule: if user already has FREE_ACCESS_10D, skip.
+ * Assign 10-day Free Access to a user.
+ *
+ * Called on registration (password and Google OAuth).
+ *
+ * One grant per account, enforced two ways:
+ *   1. This function checks for an existing FREE_ACCESS_10D row first.
+ *   2. After migration 014, the partial unique index
+ *      idx_memberships_one_free_access rejects a duplicate insert, so
+ *      concurrent registrations cannot double-grant.
+ *
+ * The FREE_ACCESS_10D grant is the ONLY one-time-per-user rule in the system.
+ * Paid plans (TRIAL_1D, WEEK_1, MONTH_1) are repeatable and are never
+ * restricted by prior free access.
  */
 export async function assignFreeAccess(supabase: any, userId: string): Promise<void> {
-  // Check if user already has free access
+  // Fast path: already granted — do not extend or duplicate the window.
   const { data: existing } = await supabase
     .from('memberships')
     .select('id')
@@ -139,17 +137,38 @@ export async function assignFreeAccess(supabase: any, userId: string): Promise<v
   const expiry = new Date(start);
   expiry.setDate(expiry.getDate() + 10);
 
-  await supabase.from('memberships').insert({
-    user_id: userId,
-    plan_id: 'FREE_ACCESS_10D',
-    amount: 0,
-    currency: 'INR',
-    status: 'success',
-    membership_start_date: start.toISOString(),
-    membership_expiry_date: expiry.toISOString(),
-  });
+  // Insert with a unique-violation guard.
+  //
+  // This is deliberately a plain insert, NOT an upsert with onConflict:
+  // PostgREST requires a matching unique constraint for ON CONFLICT, so an
+  // upsert would hard-fail (42P10) until migration 014 is applied. A plain
+  // insert keeps this function working both before and after the migration:
+  //
+  //   - Before migration 014: the existence check above is the only guard.
+  //     Behavior is identical to the previous implementation.
+  //   - After migration 014: the partial unique index
+  //     idx_memberships_one_free_access makes the insert race-safe. A
+  //     concurrent registration loses with 23505 and returns quietly.
+  const { error } = await supabase
+    .from('memberships')
+    .insert({
+      user_id: userId,
+      plan_id: 'FREE_ACCESS_10D',
+      amount: 0,
+      currency: 'INR',
+      status: 'success',
+      membership_start_date: start.toISOString(),
+      membership_expiry_date: expiry.toISOString(),
+    });
 
-  // Mark user's free trial as used
+  if (error) {
+    // Another request already granted access. Intended outcome, not a failure.
+    if (error.code === '23505') return;
+    console.error('[MEMBERSHIP] Failed to assign Free Access:', error.message);
+    return;
+  }
+
+  // Mark user's free access as used (informational flag; no longer read for gating)
   await supabase
     .from('users')
     .update({ free_trial_used: true })
@@ -162,15 +181,17 @@ export async function createMembershipOrder(req: Request, res: Response, next: N
     const userId = req.user!.id;
     const supabase = getSupabase();
 
-    // Enforce one paid ₹99 trial per user
-    // The TRIAL_1D plan (₹99, 1-day access) is a one-time offer per account.
-    // Check if user has already used their trial before creating a new order.
-    if (input.plan_id === 'TRIAL_1D') {
-      const hasUsed = await hasUserUsedTrial(supabase, userId);
-      if (hasUsed) {
-        throw Forbidden('You have already used your 1-day trial. Purchase a weekly (₹499) or monthly (₹1,999) plan to continue.');
-      }
-    }
+    // No per-plan eligibility gate here.
+    //
+    // TRIAL_1D (₹99, 1 Day Access) is a PAID, REPEATABLE plan. It is never
+    // blocked by prior free access or by a previous ₹99 purchase. Payment is
+    // still required for every purchase — the Razorpay order below is the gate.
+    //
+    // WEEK_1 (₹499) and MONTH_1 (₹1,999) are likewise always purchasable.
+    //
+    // FREE_ACCESS_10D is the only one-time-per-user grant, and it is not
+    // purchasable at all (it is excluded from createOrderSchema and is
+    // assigned server-side by assignFreeAccess on registration).
 
     // Server calculates amount from plan; client amount ignored
     const plan = PLANS[input.plan_id];
@@ -246,16 +267,10 @@ export async function verifyMembershipPayment(req: Request, res: Response, next:
 
     if (uErr) throw uErr;
 
-    // If this was a TRIAL_1D payment, mark the user's trial as used
-    // This enforces the one-trial-per-user rule for future attempts
-    if (m.plan_id === 'TRIAL_1D') {
-      await supabase
-        .from('users')
-        .update({ free_trial_used: true })
-        .eq('id', userId)
-        .select()
-        .single();
-    }
+    // NOTE: a successful TRIAL_1D payment no longer sets free_trial_used and no
+    // longer blocks anything. TRIAL_1D is a repeatable paid plan; each purchase
+    // requires its own payment (verified above via HMAC signature). The
+    // free_trial_used column is retained for historical compatibility only.
 
     res.status(200).json({
       data: {

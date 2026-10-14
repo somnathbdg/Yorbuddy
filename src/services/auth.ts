@@ -82,8 +82,21 @@ class AuthService {
     return response.data;
   }
 
-  async exchangeGoogleCode(code: string): Promise<AuthResponse> {
-    const response = await apiClient.post('/auth/google/exchange', { code });
+  /**
+   * Exchange the one-time OAuth code for auth tokens.
+   *
+   * `options.timeout` lets the callback page wait longer than the default 10s
+   * request budget, since the backend may be waking up from a cold start.
+   */
+  async exchangeGoogleCode(
+    code: string,
+    options?: { timeout?: number },
+  ): Promise<AuthResponse> {
+    const response = await apiClient.post(
+      '/auth/google/exchange',
+      { code },
+      options?.timeout ? { timeout: options.timeout } : undefined,
+    );
     const data = response.data.data;
     this.setTokens(data.accessToken, data.refreshToken);
     return data;

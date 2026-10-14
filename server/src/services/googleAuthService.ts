@@ -1,6 +1,7 @@
 import { getSupabase } from '../config/database.js';
 import { generateAccessToken, generateRefreshToken } from '../utils/jwt.js';
 import { Conflict, Unauthorized, BadRequest } from '../middleware/errorHandler.js';
+import { assignFreeAccess } from './membershipService.js';
 import crypto from 'crypto';
 
 // ========== Types ==========
@@ -430,6 +431,19 @@ export async function handleGoogleCallback(
   // Check if account is active
   if (!user.is_active) {
     throw Unauthorized('Your account has been deactivated. Contact support.');
+  }
+
+  // Grant 10-day Free Access to genuinely new accounts.
+  //
+  // Mirrors the password-registration path (authService.register). The one
+  // grant per account is enforced inside assignFreeAccess (existence check +
+  // upsert with ignoreDuplicates, backed by migration 014's partial unique
+  // index), so this is safe to call on every new-user creation.
+  //
+  // Only for isNewUser === true: an account linked to an existing user by
+  // email already has its own membership history and must not be re-granted.
+  if (isNewUser) {
+    await assignFreeAccess(getSupabase(), user.id);
   }
 
   // Issue JWT tokens
