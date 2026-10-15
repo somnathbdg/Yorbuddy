@@ -33,6 +33,7 @@ interface GoogleAuthResult {
     is_active: boolean;
     is_membership_paid: boolean;
     created_at: string;
+    photo_url: string | null;
   };
   accessToken: string;
   refreshToken: string;
