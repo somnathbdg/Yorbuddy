@@ -185,6 +185,7 @@ class UserService {
     const response = await apiClient.post(`/kyc/upload/${kind}`, file, {
       headers: { 'Content-Type': file.type },
       transformRequest: [(data) => data],
+      timeout: 60000,
     });
     return response.data.data;
   }
