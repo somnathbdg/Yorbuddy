@@ -1,0 +1,21 @@
+/**
+ * Canonicalize Indian mobile numbers to their 10-digit national form.
+ * Accepts 10 digits, +91/91 country-code forms, and a leading domestic 0.
+ * Rejects extensions, short codes, and non-Indian numbers.
+ */
+export function normalizeIndianPhone(value: string): string {
+  const digits = String(value || '').replace(/\\D/g, '');
+
+  let national = digits;
+  if (national.length === 12 && national.startsWith('91')) {
+    national = national.slice(2);
+  } else if (national.length === 11 && national.startsWith('0')) {
+    national = national.slice(1);
+  }
+
+  if (!/^[6-9]\\d{9}$/.test(national)) {
+    throw new Error('Enter a valid 10-digit Indian mobile number.');
+  }
+
+  return national;
+}
