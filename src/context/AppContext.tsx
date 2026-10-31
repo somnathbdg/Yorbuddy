@@ -84,6 +84,7 @@ interface AppContextType {
     is_active: boolean;
     start_date: string | null;
     expiry_date: string | null;
+    has_free_access_grant: boolean;
   } | null;
   fetchApiMembership: () => Promise<void>;
   fetchVerificationStatus: () => Promise<void>;
@@ -271,6 +272,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     is_active: boolean;
     start_date: string | null;
     expiry_date: string | null;
+    has_free_access_grant: boolean;
   } | null>(null);
 
   const fetchApiMembership = useCallback(async () => {
