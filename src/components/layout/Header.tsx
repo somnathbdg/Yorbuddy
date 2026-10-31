@@ -362,7 +362,7 @@ export const Header: React.FC = () => {
                       aria-label={`${currentUser.full_name} profile initials`}
                       className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white bg-gradient-to-br from-blue-600 to-pink-500 ${isAdmin ? 'ring-2 ring-amber-400' : 'ring-2 ring-blue-500/30'}`}
                     >
-                      {currentUser.full_name.trim().split(/\\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('')}
+                      {currentUser.full_name.trim().split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('')}
                     </span>
                   )}
                   <span className="text-xs font-bold text-slate-800 max-w-[90px] truncate">
