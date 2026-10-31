@@ -23,6 +23,8 @@ export const Header: React.FC = () => {
     activeTab,
     setActiveTab,
     currentUser,
+    userProfile,
+    verificationStatus,
     setCurrentUser,
     isAuthenticated,
     setIsAuthenticated,
@@ -349,11 +351,20 @@ export const Header: React.FC = () => {
                       : 'border-slate-200/80 hover:border-slate-300'
                   }`}
                 >
-                  <img
-                    src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80"
-                    alt="Profile"
-                    className={`w-7 h-7 rounded-full object-cover ${isAdmin ? 'ring-2 ring-amber-400' : 'ring-2 ring-blue-500/30'}`}
-                  />
+                  {userProfile?.photo_url ? (
+                    <img
+                      src={userProfile.photo_url}
+                      alt={currentUser.full_name}
+                      className={`w-7 h-7 rounded-full object-cover ${isAdmin ? 'ring-2 ring-amber-400' : 'ring-2 ring-blue-500/30'}`}
+                    />
+                  ) : (
+                    <span
+                      aria-label={`${currentUser.full_name} profile initials`}
+                      className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white bg-gradient-to-br from-blue-600 to-pink-500 ${isAdmin ? 'ring-2 ring-amber-400' : 'ring-2 ring-blue-500/30'}`}
+                    >
+                      {currentUser.full_name.trim().split(/\\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('')}
+                    </span>
+                  )}
                   <span className="text-xs font-bold text-slate-800 max-w-[90px] truncate">
                     {currentUser.full_name.split(' ')[0]}
                   </span>
