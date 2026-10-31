@@ -113,6 +113,9 @@ export const PricingView: React.FC = () => {
   const [membershipSuccess, setMembershipSuccess] = useState(false);
 
   const activePlanId = apiMembership?.is_active ? apiMembership.plan_id : null;
+  // A free trial is a one-time grant. Once recorded, it must never be offered
+  // again, even after expiry or while a paid plan is active.
+  const hasUsedFreeAccess = Boolean(apiMembership?.has_free_access_grant);
 
   // Refresh membership state on mount
   useEffect(() => {
@@ -406,6 +409,17 @@ export const PricingView: React.FC = () => {
                     className="w-full py-3.5 rounded-2xl font-black text-base shadow-lg flex items-center justify-center space-x-2 bg-slate-100 text-slate-500 cursor-not-allowed"
                   >
                     <span>Access Active — Cannot Repurchase</span>
+                  </button>
+                ) : plan.apiPlanId === 'FREE_ACCESS_10D' && hasUsedFreeAccess ? (
+                  <button
+                    type="button"
+                    disabled
+                    aria-disabled="true"
+                    className="w-full py-3.5 rounded-2xl font-black text-base flex items-center justify-center space-x-2 bg-slate-100 text-slate-500 cursor-not-allowed border border-slate-200"
+                    title="Free Access can only be granted once per account."
+                  >
+                    <span>Free Trial Already Used</span>
+                    <Lock className="w-4 h-4" />
                   </button>
                 ) : plan.apiPlanId === 'FREE_ACCESS_10D' ? (
                   <button
