@@ -3,6 +3,7 @@ import { getSupabase } from '../config/database.js';
 import { z } from 'zod';
 import { BadRequest, NotFound, Forbidden } from '../middleware/errorHandler.js';
 import crypto from 'crypto';
+import { normalizeIndianPhone } from '../utils/phone.js';
 
 // ========== Types ==========
 
@@ -25,7 +26,7 @@ const verifyEmailCodeSchema = z.object({
 }).strict();
 
 const requestPhoneCodeSchema = z.object({
-  phone: z.string().min(10).max(15).regex(/^\+?\d{10,15}$/, 'Invalid phone format'),
+  phone: z.string().min(10).max(20),
 }).strict();
 
 const verifyPhoneCodeSchema = z.object({
@@ -233,11 +234,25 @@ export async function requestPhoneCode(req: Request, res: Response, next: NextFu
     const input = requestPhoneCodeSchema.parse(req.body);
     const userId = req.user!.id;
     const supabase = getSupabase();
+    const normalizedPhone = normalizeIndianPhone(input.phone);
 
-    // Update user's phone number if provided
+    // Reject a number already assigned to another account before sending OTP.
+    const { data: existingPhone, error: phoneLookupError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('phone', normalizedPhone)
+      .neq('id', userId)
+      .limit(1);
+
+    if (phoneLookupError) throw phoneLookupError;
+    if (existingPhone && existingPhone.length > 0) {
+      throw BadRequest('This mobile number is already registered to another account.');
+    }
+
+    // Store only the canonical 10-digit Indian mobile number.
     const { error: updateError } = await supabase
       .from('users')
-      .update({ phone: input.phone })
+      .update({ phone: normalizedPhone })
       .eq('id', userId);
 
     if (updateError) {
@@ -252,7 +267,7 @@ export async function requestPhoneCode(req: Request, res: Response, next: NextFu
     // For development: log to console for testing convenience.
     // The verification code is NEVER returned in the API response.
     if (process.env.NODE_ENV !== 'production') {
-      console.log(`[DEV] Phone verification code for ${input.phone}: ${code}`);
+      console.log(`[DEV] Phone verification code for ${normalizedPhone}: ${code}`);
     }
 
     res.status(200).json({
