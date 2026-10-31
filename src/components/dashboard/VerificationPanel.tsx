@@ -407,9 +407,8 @@ interface KycSubmissionProps {
 }
 
 const DOC_TYPES = [
-  { value: 'aadhaar', label: 'Aadhaar Card' },
   { value: 'pan', label: 'PAN Card' },
-  { value: 'passport', label: 'Passport' },
+  { value: 'driving_license', label: 'Driving Licence' },
   { value: 'voter_id', label: 'Voter ID' },
 ] as const;
 
@@ -419,344 +418,86 @@ export const KycSubmissionPanel: React.FC<KycSubmissionProps> = ({ onStatusChang
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-
-  // Form state
-  const [docType, setDocType] = useState<'aadhaar' | 'pan' | 'passport' | 'voter_id'>('aadhaar');
-  const [docFrontUrl, setDocFrontUrl] = useState('');
-  const [selfieUrl, setSelfieUrl] = useState('');
+  const [docType, setDocType] = useState<'pan' | 'driving_license' | 'voter_id'>('pan');
+  const [documentFile, setDocumentFile] = useState<File | null>(null);
+  const [selfieFile, setSelfieFile] = useState<File | null>(null);
   const [showForm, setShowForm] = useState(false);
 
   const fetchStatus = useCallback(async () => {
     try {
       const res = await userService.getMyKycStatus();
-      if (res.data && res.data.status) {
-        setStatus(res.data.status as any);
-        setRejectionReason(res.data.rejection_reason || null);
-      } else {
-        setStatus('not_submitted');
-        setRejectionReason(null);
-      }
+      setStatus(res.data?.status || 'not_submitted');
+      setRejectionReason(res.data?.rejection_reason || null);
     } catch {
-      // On error, default to not_submitted so user can still submit
-      setStatus('not_submitted');
-      setRejectionReason(null);
+      setMessage({ type: 'error', text: 'Unable to load KYC status. Please refresh and try again.' });
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  useEffect(() => {
-    fetchStatus();
-  }, [fetchStatus]);
+  useEffect(() => { fetchStatus(); }, [fetchStatus]);
+
+  const validateFile = (file: File, kind: 'document' | 'selfie') => {
+    const allowed = kind === 'document' ? ['image/jpeg', 'image/png', 'application/pdf'] : ['image/jpeg', 'image/png'];
+    return allowed.includes(file.type) && file.size > 0 && file.size <= 5 * 1024 * 1024;
+  };
 
   const handleSubmit = async () => {
-    // Validation
-    if (!docFrontUrl || !selfieUrl) {
-      setMessage({ type: 'error', text: 'Please provide both document URL and selfie URL.' });
+    if (!documentFile || !selfieFile) {
+      setMessage({ type: 'error', text: 'Please select both an identity document and a selfie.' });
       return;
     }
-    if (!docFrontUrl.startsWith('http')) {
-      setMessage({ type: 'error', text: 'Document URL must be a valid URL starting with http(s)://' });
+    if (!validateFile(documentFile, 'document') || !validateFile(selfieFile, 'selfie')) {
+      setMessage({ type: 'error', text: 'Document: JPG, PNG or PDF. Selfie: JPG or PNG. Each file must be 5 MB or smaller.' });
       return;
     }
-    if (!selfieUrl.startsWith('http')) {
-      setMessage({ type: 'error', text: 'Selfie URL must be a valid URL starting with http(s)://' });
-      return;
-    }
-
     setIsSubmitting(true);
     setMessage(null);
-
-    const payload: KycSubmission = {
-      doc_type: docType,
-      doc_front_url: docFrontUrl,
-      selfie_url: selfieUrl,
-    };
-
     try {
-      const res = await userService.submitKyc(payload);
+      const document = await userService.uploadKycFile(documentFile, 'document');
+      const selfie = await userService.uploadKycFile(selfieFile, 'selfie');
+      const res = await userService.submitKyc({
+        doc_type: docType,
+        document_path: document.object_path,
+        selfie_path: selfie.object_path,
+      });
       setStatus('pending');
       setMessage({ type: 'success', text: res.message });
       setShowForm(false);
-      setDocFrontUrl('');
-      setSelfieUrl('');
+      setDocumentFile(null);
+      setSelfieFile(null);
       onStatusChange?.();
     } catch (err: any) {
       const apiError = err.response?.data?.error;
-      setMessage({ type: 'error', text: apiError?.message || 'Failed to submit KYC.' });
+      setMessage({ type: 'error', text: apiError?.message || 'KYC upload or submission failed. Please try again.' });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const renderBadge = () => {
-    if (status === 'approved') {
-      return (
-        <span className="flex items-center text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-full">
-          <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-          Approved
-        </span>
-      );
-    }
-    if (status === 'pending') {
-      return (
-        <span className="flex items-center text-xs font-bold text-amber-600 bg-amber-50 px-3 py-1.5 rounded-full">
-          <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
-          Pending Review
-        </span>
-      );
-    }
-    if (status === 'rejected') {
-      return (
-        <span className="flex items-center text-xs font-bold text-rose-600 bg-rose-50 px-3 py-1.5 rounded-full">
-          <XCircle className="w-3.5 h-3.5 mr-1" />
-          Rejected
-        </span>
-      );
-    }
-    // not_submitted
-    return (
-      <span className="flex items-center text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-full">
-        <XCircle className="w-3.5 h-3.5 mr-1" />
-        Not Submitted
-      </span>
-    );
-  };
-
-  const renderActionButton = () => {
-    if (showForm) return null;
-    
-    if (status === 'approved') {
-      return (
-        <button
-          onClick={() => setShowForm(true)}
-          className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold flex items-center justify-center space-x-2 transition-all"
-        >
-          <CheckCircle2 className="w-4 h-4" />
-          <span>View KYC Status</span>
-        </button>
-      );
-    }
-    if (status === 'pending') {
-      return (
-        <button
-          onClick={() => setShowForm(true)}
-          className="w-full py-2.5 px-4 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold flex items-center justify-center space-x-2 transition-all"
-        >
-          <Loader2 className="w-4 h-4" />
-          <span>View KYC Status</span>
-        </button>
-      );
-    }
-    if (status === 'rejected') {
-      return (
-        <button
-          onClick={() => setShowForm(true)}
-          className="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold flex items-center justify-center space-x-2 transition-all"
-        >
-          <FileCheck className="w-4 h-4" />
-          <span>Resubmit KYC</span>
-        </button>
-      );
-    }
-    // not_submitted
-    return (
-      <button
-        onClick={() => setShowForm(true)}
-        className="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold flex items-center justify-center space-x-2 transition-all"
-      >
-        <FileCheck className="w-4 h-4" />
-        <span>Submit KYC Documents</span>
-      </button>
-    );
-  };
-
-  if (isLoading) {
-    return (
-      <div className="p-5 rounded-2xl bg-white border border-slate-200 flex items-center justify-center min-h-[120px]">
-        <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
-        <span className="ml-2 text-sm text-slate-500">Loading...</span>
-      </div>
-    );
-  }
+  if (isLoading) return <div className="p-5 rounded-2xl bg-white border border-slate-200 flex items-center justify-center"><Loader2 className="w-5 h-5 text-blue-600 animate-spin" /><span className="ml-2 text-sm text-slate-500">Loading KYC status...</span></div>;
 
   return (
     <div className="p-5 rounded-2xl bg-white border border-slate-200 space-y-4">
       <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${status === 'approved' ? 'bg-emerald-100' : status === 'rejected' ? 'bg-rose-100' : 'bg-blue-100'}`}>
-            <FileCheck className={`w-5 h-5 ${status === 'approved' ? 'text-emerald-600' : status === 'rejected' ? 'text-rose-600' : 'text-blue-600'}`} />
-          </div>
-          <div>
-            <h4 className="text-sm font-bold text-slate-900">KYC Verification</h4>
-            <p className="text-xs text-slate-500">Identity document verification</p>
-          </div>
-        </div>
-        {renderBadge()}
+        <div><h4 className="text-sm font-bold text-slate-900">KYC Verification</h4><p className="text-xs text-slate-500">18+ • Manual identity review • Private document storage</p></div>
+        <span className={`text-xs font-bold px-3 py-1.5 rounded-full ${status === 'approved' ? 'bg-emerald-50 text-emerald-700' : status === 'pending' ? 'bg-amber-50 text-amber-700' : status === 'rejected' ? 'bg-rose-50 text-rose-700' : 'bg-slate-100 text-slate-600'}`}>{status.replace('_', ' ')}</span>
       </div>
-
-      {status === 'rejected' && rejectionReason && (
-        <div className="p-3 rounded-xl bg-rose-50 border border-rose-200">
-          <div className="flex items-start space-x-2">
-            <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="text-xs font-bold text-rose-700">Rejection Reason:</p>
-              <p className="text-xs text-rose-600 mt-0.5">{rejectionReason}</p>
-            </div>
-          </div>
+      {status === 'pending' && <p className="p-3 rounded-xl bg-amber-50 text-xs text-amber-800">Your documents are awaiting manual admin review.</p>}
+      {status === 'approved' && <p className="p-3 rounded-xl bg-emerald-50 text-xs text-emerald-800">Your KYC has been approved.</p>}
+      {status === 'rejected' && rejectionReason && <p className="p-3 rounded-xl bg-rose-50 text-xs text-rose-700">Reason: {rejectionReason}</p>}
+      {status !== 'pending' && status !== 'approved' && !showForm && <button onClick={() => setShowForm(true)} className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold">{status === 'rejected' ? 'Resubmit KYC' : 'Upload KYC Documents'}</button>}
+      {showForm && status !== 'pending' && status !== 'approved' && (
+        <div className="space-y-4 border-t border-slate-100 pt-4">
+          <div><label className="block text-xs font-semibold text-slate-600 mb-1">Identity document</label><select value={docType} onChange={e => setDocType(e.target.value as typeof docType)} className="w-full p-3 rounded-xl border border-slate-300 bg-slate-50 text-sm">{DOC_TYPES.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}</select></div>
+          <div><label className="block text-xs font-semibold text-slate-600 mb-1">Document image / PDF (max 5 MB)</label><input type="file" accept="image/jpeg,image/png,application/pdf" onChange={e => setDocumentFile(e.target.files?.[0] || null)} className="w-full text-sm" /></div>
+          <div><label className="block text-xs font-semibold text-slate-600 mb-1">Clear selfie (max 5 MB)</label><input type="file" accept="image/jpeg,image/png" onChange={e => setSelfieFile(e.target.files?.[0] || null)} className="w-full text-sm" /></div>
+          <p className="text-[11px] text-slate-500">Your files are submitted for private storage and manual review. Do not enter your document number in this form.</p>
+          <button onClick={handleSubmit} disabled={isSubmitting || !documentFile || !selfieFile} className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-600 to-pink-600 text-white text-sm font-bold disabled:opacity-50 flex items-center justify-center gap-2">{isSubmitting ? <><Loader2 className="w-4 h-4 animate-spin" />Uploading securely...</> : <><ShieldCheck className="w-4 h-4" />Submit for verification</>}</button>
+          <button onClick={() => setShowForm(false)} className="w-full py-2 text-xs text-slate-500">Cancel</button>
         </div>
       )}
-
-      {status === 'pending' && !showForm && (
-        <div className="p-3 rounded-xl bg-amber-50 border border-amber-200">
-          <p className="text-xs text-amber-700 font-medium">
-            Your KYC submission is under review. You will be notified once approved.
-          </p>
-        </div>
-      )}
-
-      {status === 'approved' && !showForm && (
-        <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200">
-          <p className="text-xs text-emerald-700 font-medium">
-            Your identity has been verified. You now have full access to all platform features.
-          </p>
-        </div>
-      )}
-
-      {renderActionButton()}
-
-      {showForm && status === 'pending' && (
-        <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 space-y-2">
-          <div className="flex items-center space-x-2">
-            <Loader2 className="w-5 h-5 text-amber-600 animate-spin" />
-            <span className="text-sm font-bold text-amber-800">KYC Under Review</span>
-          </div>
-          <p className="text-xs text-amber-700">
-            Your KYC submission is being reviewed by our team. This typically takes 24-48 hours.
-          </p>
-          <button
-            onClick={() => setShowForm(false)}
-            className="mt-2 text-xs text-amber-600 hover:text-amber-700 font-medium"
-          >
-            Close
-          </button>
-        </div>
-      )}
-
-      {showForm && status === 'approved' && (
-        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 space-y-2">
-          <div className="flex items-center space-x-2">
-            <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-            <span className="text-sm font-bold text-emerald-800">KYC Approved</span>
-          </div>
-          <p className="text-xs text-emerald-700">
-            Your identity has been verified. You have full access to all platform features.
-          </p>
-          <button
-            onClick={() => setShowForm(false)}
-            className="mt-2 text-xs text-emerald-600 hover:text-emerald-700 font-medium"
-          >
-            Close
-          </button>
-        </div>
-      )}
-
-      {showForm && (status === 'not_submitted' || status === 'rejected') && (
-        <div className="space-y-4 pt-2 border-t border-slate-100">
-          <div>
-            <label className="text-xs font-semibold text-slate-600 block mb-1">Document Type</label>
-            <select
-              value={docType}
-              onChange={(e) => setDocType(e.target.value as any)}
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-            >
-              {DOC_TYPES.map((dt) => (
-                <option key={dt.value} value={dt.value}>{dt.label}</option>
-              ))}
-            </select>
-            <p className="text-[10px] text-slate-400 mt-1">
-              Select the type of government-issued ID you want to verify with.
-            </p>
-          </div>
-
-          <div>
-            <label className="text-xs font-semibold text-slate-600 block mb-1">Document Front Image URL</label>
-            <input
-              type="url"
-              value={docFrontUrl}
-              onChange={(e) => setDocFrontUrl(e.target.value)}
-              placeholder="https://your-storage.com/doc-front.jpg"
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-            />
-            <p className="text-[10px] text-slate-400 mt-1">
-              Upload your document to a cloud storage service and paste the public URL here.
-            </p>
-          </div>
-
-          <div>
-            <label className="text-xs font-semibold text-slate-600 block mb-1">Selfie Image URL</label>
-            <input
-              type="url"
-              value={selfieUrl}
-              onChange={(e) => setSelfieUrl(e.target.value)}
-              placeholder="https://your-storage.com/selfie.jpg"
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-            />
-            <p className="text-[10px] text-slate-400 mt-1">
-              A clear selfie photo for identity matching with your document.
-            </p>
-          </div>
-
-          <div className="p-3 rounded-xl bg-blue-50 border border-blue-200">
-            <div className="flex items-start space-x-2">
-              <Eye className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
-              <p className="text-[10px] text-blue-700">
-                We do NOT store your document images. Only URLs to externally hosted images are saved. Do NOT enter your Aadhaar/PAN/passport number — only upload the image URL.
-              </p>
-            </div>
-          </div>
-
-          <button
-            onClick={handleSubmit}
-            disabled={isSubmitting}
-            className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-pink-600 hover:from-blue-700 hover:to-pink-700 text-white text-sm font-bold flex items-center justify-center space-x-2 disabled:opacity-50 transition-all"
-          >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Submitting...</span>
-              </>
-            ) : (
-              <>
-                <ShieldCheck className="w-4 h-4" />
-                <span>Submit for Verification</span>
-              </>
-            )}
-          </button>
-
-          {status !== 'rejected' && (
-            <button
-              onClick={() => setShowForm(false)}
-              className="w-full py-2 text-xs text-slate-500 hover:text-slate-700 font-medium"
-            >
-              Cancel
-            </button>
-          )}
-        </div>
-      )}
-
-      {message && (
-        <div className={`p-3 rounded-xl flex items-start space-x-2 ${message.type === 'success' ? 'bg-emerald-50 border border-emerald-200' : 'bg-rose-50 border border-rose-200'}`}>
-          {message.type === 'success' ? (
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
-          ) : (
-            <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
-          )}
-          <p className={`text-xs font-medium ${message.type === 'success' ? 'text-emerald-700' : 'text-rose-700'}`}>
-            {message.text}
-          </p>
-        </div>
-      )}
+      {message && <div className={`p-3 rounded-xl text-xs ${message.type === 'success' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>{message.text}</div>}
     </div>
   );
 };
