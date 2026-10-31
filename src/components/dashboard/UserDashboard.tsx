@@ -205,7 +205,7 @@ export const UserDashboard: React.FC = () => {
                   aria-label={`${currentUser?.full_name || 'User'} profile initials`}
                   className="w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold text-white bg-gradient-to-br from-blue-600 to-pink-500 ring-4 ring-blue-500/20"
                 >
-                  {(currentUser?.full_name || 'U').trim().split(/\\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('')}
+                  {(currentUser?.full_name || 'U').trim().split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('')}
                 </div>
               )}
               <span className="absolute bottom-0 right-0 w-4 h-4 bg-emerald-500 rounded-full border-2 border-white" />
