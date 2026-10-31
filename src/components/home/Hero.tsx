@@ -276,25 +276,40 @@ export const Hero: React.FC = () => {
               </div>
 
               {/* Bottom-left card — reflects auth state */}
-              <div className="absolute -bottom-6 -left-4 sm:-left-10 z-20 glass-panel p-3 rounded-2xl flex items-center space-x-3 animate-float">
-                <div className="w-11 h-11 rounded-full bg-gradient-to-tr from-blue-600 to-pink-500 flex items-center justify-center text-white shadow-lg shadow-blue-500/30">
-                  {isAuthenticated ? <Video className="w-5 h-5" /> : <ShieldCheck className="w-5 h-5" />}
+              {isAuthenticated ? (
+                <div className="absolute -bottom-6 -left-4 sm:-left-10 z-20 glass-panel p-3 rounded-2xl flex items-center space-x-3 animate-float">
+                  <div className="w-11 h-11 rounded-full bg-gradient-to-tr from-blue-600 to-pink-500 flex items-center justify-center text-white shadow-lg shadow-blue-500/30">
+                    <Video className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-slate-900">Verified Buddies</p>
+                    <p className="text-xs text-slate-500">Trusted companions near you</p>
+                    <button
+                      onClick={() => setActiveTab('find-buddy')}
+                      className="text-[11px] font-bold text-blue-600 hover:underline"
+                    >
+                      Find a Buddy →
+                    </button>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-bold text-slate-900">
-                    {isAuthenticated ? 'Video KYC Verified' : 'Login to Discover'}
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    {isAuthenticated ? 'Trusted companions near you' : 'Verified Buddies Near You'}
-                  </p>
-                  <button
-                    onClick={() => setActiveTab('find-buddy')}
-                    className="text-[11px] font-bold text-blue-600 hover:underline"
-                  >
-                    {isAuthenticated ? 'Find a Buddy →' : 'Join YorBuddy →'}
-                  </button>
+              ) : (
+                <div className="absolute -bottom-6 -left-4 sm:-left-10 z-20 glass-panel p-3 rounded-2xl flex items-center space-x-3 animate-float">
+                  <div className="w-11 h-11 rounded-full bg-gradient-to-tr from-blue-600 to-pink-500 flex items-center justify-center text-white shadow-lg shadow-blue-500/30">
+                    <ShieldCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-slate-900">Login to Discover</p>
+                    <p className="text-xs text-slate-500">Verified Buddies Near You</p>
+                    <button
+                      onClick={() => setActiveTab('find-buddy')}
+                      className="text-[11px] font-bold text-blue-600 hover:underline"
+                    >
+                      Join YorBuddy →
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
+              {/* Floating Safety Chip */}
             </div>
           </div>
         </div>

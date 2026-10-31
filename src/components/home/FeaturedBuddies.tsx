@@ -40,7 +40,7 @@ export const FeaturedBuddies: React.FC = () => {
             </div>
           </div>
 
-          <div className="relative glass-panel rounded-3xl p-8 sm:p-12 text-center overflow-hidden">
+          <div className="relative glass-panel bg-gradient-to-br from-blue-50 via-white to-pink-50 shadow-lg shadow-blue-500/25 rounded-3xl p-8 sm:p-12 text-center overflow-hidden">
             <div className="orb orb-purple top-[-40%] left-[20%] w-[300px] h-[300px] opacity-30" />
             <div className="relative">
               <div className="w-20 h-20 rounded-3xl bg-gradient-to-tr from-blue-600 to-pink-500 flex items-center justify-center mx-auto mb-6 shadow-tint-violet">
