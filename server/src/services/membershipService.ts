@@ -306,6 +306,11 @@ export async function getMembershipStatus(req: Request, res: Response, next: Nex
       return;
     }
 
+    // Preserve the one-time free-trial history even when another paid plan
+    // is currently active. The frontend uses this flag only for display;
+    // assignFreeAccess and the database unique index remain authoritative.
+    const hasFreeAccessGrant = list.some((item: any) => item.plan_id === 'FREE_ACCESS_10D');
+
     const now = Date.now();
     // Return an active membership if any exists; otherwise return the latest
     // expired successful membership so the UI can display its expiry.
@@ -325,6 +330,7 @@ export async function getMembershipStatus(req: Request, res: Response, next: Nex
         is_active: isActive,
         start_date: m.membership_start_date,
         expiry_date: m.membership_expiry_date,
+        has_free_access_grant: hasFreeAccessGrant,
       },
     });
   } catch (err: any) { next(err); }
