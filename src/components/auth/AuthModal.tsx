@@ -264,10 +264,42 @@ export const AuthModal: React.FC = () => {
     setRegisterStep(3);
   };
 
-  const handleStep3Submit = (e: React.FormEvent) => {
+  const handleStep3Submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // All plans (except FREE_ACCESS_10D) require payment — proceed to Step 4
-    setRegisterStep(4);
+    setErrorText('');
+
+    // If the user explicitly selected a paid plan before registering,
+    // preserve that choice and continue to checkout.
+    if (pendingMembershipPlan && pendingMembershipPlan !== 'FREE_ACCESS_10D') {
+      setRegisterStep(4);
+      return;
+    }
+
+    // New registrations receive FREE_ACCESS_10D automatically from the
+    // backend during account creation. Verify that grant before skipping
+    // the payment screen; never silently grant access from the frontend.
+    setIsLoading(true);
+    try {
+      const membership = await membershipService.getMembershipStatus();
+      if (
+        !membership ||
+        membership.plan_id !== 'FREE_ACCESS_10D' ||
+        !membership.is_active
+      ) {
+        setErrorText('Your 10-day Free Access could not be verified. Please contact support.');
+        return;
+      }
+
+      await fetchApiMembership();
+      setIsRegisterModalOpen(false);
+      setActiveRole('user');
+      setActiveTab('user-dashboard');
+    } catch (err: any) {
+      const apiError = err.response?.data?.error;
+      setErrorText(apiError?.message || 'Unable to verify your 10-day Free Access. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
 
