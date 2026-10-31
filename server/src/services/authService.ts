@@ -4,6 +4,7 @@ import { hashPassword, verifyPassword } from '../utils/password.js';
 import { generateAccessToken, generateRefreshToken, verifyRefreshToken } from '../utils/jwt.js';
 import { Conflict, Unauthorized, BadRequest } from '../middleware/errorHandler.js';
 import { assignFreeAccess } from './membershipService.js';
+import { normalizeIndianPhone } from '../utils/phone.js';
 import { z } from 'zod';
 
 // ========== Input Validation Schemas ==========
@@ -12,7 +13,7 @@ const registerSchema = z.object({
   email: z.string().email('Invalid email address').max(255),
   password: z.string().min(8, 'Password must be at least 8 characters').max(128),
   full_name: z.string().min(1, 'Full name is required').max(100),
-  phone: z.string().max(15).optional(),
+  phone: z.string().min(1, 'Mobile number is required').max(20),
   dob: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD format').optional(),
   gender: z.enum(['male', 'female', 'non-binary', 'prefer-not-to-say']).optional(),
   city: z.string().max(100).optional(),
@@ -95,24 +96,39 @@ export async function register(req: Request, res: Response, next: NextFunction):
   try {
     const input = registerSchema.parse(req.body);
 
-    // Check if email already exists
+    // Normalize the Indian mobile number before checking or storing it.
+    const normalizedPhone = normalizeIndianPhone(input.phone);
+
+    // Check email first, then phone. The database unique index remains the
+    // race-safe backstop if two registration requests arrive simultaneously.
     const existing = await findUserByEmail(input.email);
     if (existing) {
       throw Conflict('An account with this email already exists.');
+    }
+
+    const supabase = getSupabase();
+    const { data: existingPhone, error: phoneLookupError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('phone', normalizedPhone)
+      .limit(1);
+
+    if (phoneLookupError) throw phoneLookupError;
+    if (existingPhone && existingPhone.length > 0) {
+      throw Conflict('This mobile number is already registered. Please log in or use a different number.');
     }
 
     // Hash password
     const password_hash = hashPassword(input.password);
 
     // Create user in database
-    const supabase = getSupabase();
     const { data: newUser, error } = await supabase
       .from('users')
       .insert({
         email: input.email.toLowerCase(),
         password_hash,
         full_name: input.full_name,
-        phone: input.phone || null,
+        phone: normalizedPhone,
         dob: input.dob || null,
         gender: input.gender || null,
         role: 'user', // Always force role to 'user' on public registration
@@ -121,7 +137,7 @@ export async function register(req: Request, res: Response, next: NextFunction):
       .single();
 
     if (error) {
-      if (error.code === '23505') throw Conflict('An account with this email already exists.');
+      if (error.code === '23505') throw Conflict('This email or mobile number is already registered. Please log in or use different details.');
       throw error;
     }
 
