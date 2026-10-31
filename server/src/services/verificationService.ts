@@ -322,14 +322,12 @@ export async function submitKyc(req: Request, res: Response, next: NextFunction)
     assertOwnedKycPath(input.document_path, userId);
     assertOwnedKycPath(input.selfie_path, userId);
 
-    // Verify both objects exist in the private bucket before creating the KYC record.
-    const { data: documentFile, error: documentError } = await supabase.storage
-      .from('kyc-documents').list(`${userId}`, { search: input.document_path.split('/')[1] });
-    if (documentError) throw documentError;
-    const { data: selfieFile, error: selfieError } = await supabase.storage
-      .from('kyc-documents').list(`${userId}`, { search: input.selfie_path.split('/')[1] });
-    if (selfieError) throw selfieError;
-    if (!documentFile?.length || !selfieFile?.length) {
+    // Verify each exact object exists without returning a URL to the applicant.
+    const [documentCheck, selfieCheck] = await Promise.all([
+      supabase.storage.from('kyc-documents').createSignedUrl(input.document_path, 30),
+      supabase.storage.from('kyc-documents').createSignedUrl(input.selfie_path, 30),
+    ]);
+    if (documentCheck.error || selfieCheck.error) {
       throw BadRequest('Uploaded KYC files could not be verified.');
     }
 
