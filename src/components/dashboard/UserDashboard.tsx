@@ -194,11 +194,20 @@ export const UserDashboard: React.FC = () => {
         <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="flex items-center space-x-4">
             <div className="relative">
-              <img
-                src={userProfile?.photo_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'}
-                alt={currentUser?.full_name}
-                className="w-16 h-16 rounded-full object-cover ring-4 ring-blue-500/20"
-              />
+              {userProfile?.photo_url ? (
+                <img
+                  src={userProfile.photo_url}
+                  alt={currentUser?.full_name || 'Profile'}
+                  className="w-16 h-16 rounded-full object-cover ring-4 ring-blue-500/20"
+                />
+              ) : (
+                <div
+                  aria-label={`${currentUser?.full_name || 'User'} profile initials`}
+                  className="w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold text-white bg-gradient-to-br from-blue-600 to-pink-500 ring-4 ring-blue-500/20"
+                >
+                  {(currentUser?.full_name || 'U').trim().split(/\\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('')}
+                </div>
+              )}
               <span className="absolute bottom-0 right-0 w-4 h-4 bg-emerald-500 rounded-full border-2 border-white" />
             </div>
 
@@ -207,9 +216,15 @@ export const UserDashboard: React.FC = () => {
                 <h1 className="text-xl sm:text-2xl font-black text-slate-900">
                   {currentUser?.full_name}
                 </h1>
-                <span className="w-5 h-5 rounded-full bg-blue-600 text-white text-[11px] font-bold flex items-center justify-center">
-                  ✓
-                </span>
+                {verificationStatus?.kyc === 'approved' && (
+                  <span
+                    className="w-5 h-5 rounded-full bg-blue-600 text-white text-[11px] font-bold flex items-center justify-center"
+                    title="KYC approved"
+                    aria-label="KYC verified"
+                  >
+                    ✓
+                  </span>
+                )}
               </div>
               <p className="text-xs text-slate-500">
                 {currentUser?.email} • {currentUser?.phone} • {userProfile?.city}
