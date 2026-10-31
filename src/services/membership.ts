@@ -24,6 +24,7 @@ export interface MembershipStatus {
   is_active: boolean;
   start_date: string | null;
   expiry_date: string | null;
+  has_free_access_grant: boolean;
 }
 
 class MembershipService {
