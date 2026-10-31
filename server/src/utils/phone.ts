@@ -3,8 +3,10 @@
  * Accepts 10 digits, +91/91 country-code forms, and a leading domestic 0.
  * Rejects extensions, short codes, and non-Indian numbers.
  */
+import { BadRequest } from '../middleware/errorHandler.js';
+
 export function normalizeIndianPhone(value: string): string {
-  const digits = String(value || '').replace(/\\D/g, '');
+  const digits = String(value || '').replace(/\D/g, '');
 
   let national = digits;
   if (national.length === 12 && national.startsWith('91')) {
@@ -13,8 +15,8 @@ export function normalizeIndianPhone(value: string): string {
     national = national.slice(1);
   }
 
-  if (!/^[6-9]\\d{9}$/.test(national)) {
-    throw new Error('Enter a valid 10-digit Indian mobile number.');
+  if (!/^[6-9]\d{9}$/.test(national)) {
+    throw BadRequest('Enter a valid 10-digit Indian mobile number.');
   }
 
   return national;
