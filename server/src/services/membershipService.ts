@@ -53,22 +53,25 @@ export async function checkUserMembership(supabase: any, userId: string): Promis
     .select('*')
     .eq('user_id', userId)
     .eq('status', 'success')
-    .order('created_at', { ascending: false })
-    .limit(1);
+    .order('created_at', { ascending: false });
 
-  if (error || !data || data.length === 0) {
+  if (error) throw error;
+  if (!data || data.length === 0) {
     return { isActive: false, membership: null };
   }
 
-  const m = data[0];
-  let isActive = false;
-  if (!m.membership_expiry_date) {
-    isActive = true; // Lifetime (historical records)
-  } else {
-    isActive = new Date(m.membership_expiry_date) > new Date();
-  }
+  // Do not let a newer expired plan hide an older still-active paid plan.
+  // A NULL expiry is treated as lifetime only for historical successful rows.
+  const now = Date.now();
+  const activeMembership = data.find((item: any) =>
+    !item.membership_expiry_date ||
+    new Date(item.membership_expiry_date).getTime() > now
+  );
 
-  return { isActive, membership: m };
+  return {
+    isActive: Boolean(activeMembership),
+    membership: activeMembership || data[0],
+  };
 }
 
 type PlanId = keyof typeof PLANS;
@@ -97,10 +100,10 @@ function calculateExpiry(planId: PlanId, start: Date): Date | null {
   const plan = PLANS[planId];
   if (!plan) return null;
   const d = new Date(start);
-  if (plan.period === '10 days') d.setDate(d.getDate() + 10);
-  else if (plan.period === '1 day') d.setDate(d.getDate() + 1);
-  else if (plan.period === '7 days') d.setDate(d.getDate() + 7);
-  else if (plan.period === '30 days') d.setDate(d.getDate() + 30);
+  if (plan.period === '10 days') d.setTime(d.getTime() + 10 * 24 * 60 * 60 * 1000);
+  else if (plan.period === '1 day') d.setTime(d.getTime() + 1 * 24 * 60 * 60 * 1000);
+  else if (plan.period === '7 days') d.setTime(d.getTime() + 7 * 24 * 60 * 60 * 1000);
+  else if (plan.period === '30 days') d.setTime(d.getTime() + 30 * 24 * 60 * 60 * 1000);
   return d;
 }
 
@@ -123,13 +126,14 @@ function calculateExpiry(planId: PlanId, start: Date): Date | null {
  */
 export async function assignFreeAccess(supabase: any, userId: string): Promise<void> {
   // Fast path: already granted — do not extend or duplicate the window.
-  const { data: existing } = await supabase
+  const { data: existing, error: lookupError } = await supabase
     .from('memberships')
     .select('id')
     .eq('user_id', userId)
     .eq('plan_id', 'FREE_ACCESS_10D')
     .limit(1);
 
+  if (lookupError) throw lookupError;
   if (existing && existing.length > 0) return;
 
   // Create free access membership
@@ -165,7 +169,7 @@ export async function assignFreeAccess(supabase: any, userId: string): Promise<v
     // Another request already granted access. Intended outcome, not a failure.
     if (error.code === '23505') return;
     console.error('[MEMBERSHIP] Failed to assign Free Access:', error.message);
-    return;
+    throw error;
   }
 
   // Mark user's free access as used (informational flag; no longer read for gating)
@@ -294,20 +298,23 @@ export async function getMembershipStatus(req: Request, res: Response, next: Nex
       .select('*')
       .eq('user_id', userId)
       .eq('status', 'success')
-      .order('created_at', { ascending: false })
-      .limit(1);
+      .order('created_at', { ascending: false });
 
-    if (error || !list || list.length === 0) {
+    if (error) throw error;
+    if (!list || list.length === 0) {
       res.status(200).json({ data: null });
       return;
     }
 
-    const m = list[0];
-    let isActive = false;
-    if (m.status === 'success') {
-      if (!m.membership_expiry_date) isActive = true; // Lifetime historical
-      else isActive = new Date(m.membership_expiry_date) > new Date();
-    }
+    const now = Date.now();
+    // Return an active membership if any exists; otherwise return the latest
+    // expired successful membership so the UI can display its expiry.
+    const m = list.find((item: any) =>
+      !item.membership_expiry_date ||
+      new Date(item.membership_expiry_date).getTime() > now
+    ) || list[0];
+    const isActive = !m.membership_expiry_date ||
+      new Date(m.membership_expiry_date).getTime() > now;
 
     res.status(200).json({
       data: {
