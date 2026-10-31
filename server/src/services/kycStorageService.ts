@@ -45,18 +45,18 @@ export async function uploadKycObject(req: Request, res: Response, next: NextFun
       throw BadRequest('Unsupported KYC file format.');
     }
 
-    const declaredLength = Number(req.headers['content-length']);
-    if (!Number.isSafeInteger(declaredLength) || declaredLength < 1 || declaredLength > MAX_BYTES) {
-      throw BadRequest('File must be between 1 byte and 5 MB.');
-    }
-
     if (!Buffer.isBuffer(req.body)) {
       throw BadRequest('Expected a binary file upload.');
     }
 
+    // Content-Length is optional for some proxy/transfer modes; express.raw
+    // enforces the 5 MB parser limit and the actual Buffer length is authoritative.
     const bytes: Buffer = req.body;
+    const declaredLengthHeader = req.headers['content-length'];
+    const declaredLength = declaredLengthHeader === undefined ? bytes.length : Number(declaredLengthHeader);
     if (
-      bytes.length !== declaredLength ||
+      !Number.isSafeInteger(declaredLength) ||
+      declaredLength !== bytes.length ||
       bytes.length < 1 ||
       bytes.length > MAX_BYTES ||
       !fileType.isValid(bytes)
