@@ -181,6 +181,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     initializeAuth();
   }, []);
 
+  // Load the authenticated user's real profile so uploaded photos appear in
+  // the header and dashboard. Clear profile data immediately on logout.
+  useEffect(() => {
+    let cancelled = false;
+    if (!isAuthenticated) {
+      setUserProfile(null);
+      return;
+    }
+
+    userService.getProfile()
+      .then((result) => {
+        if (!cancelled) {
+          setUserProfile(result.profile as unknown as Profile | null);
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to load user profile:', error);
+        if (!cancelled) setUserProfile(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated]);
+
   // App navigation state
   const [activeTab, setActiveTab] = useState<string>('home');
   const [legalPageSlug, setLegalPageSlug] = useState<string | null>(null);
