@@ -5,6 +5,11 @@ import { getAiFriendSubscriptionStatus } from './aiFriendSubscriptionService.js'
 
 export interface AiFriendMessage { role: 'user' | 'model'; text: string; }
 
+const MAX_HISTORY_MESSAGES = 8;
+const MAX_HISTORY_MESSAGE_CHARS = 1200;
+const MAX_OUTPUT_TOKENS = 450;
+const GEMINI_TIMEOUT_MS = 20000;
+
 export async function getAiFriendVerification(userId: string) {
   const supabase = getSupabase();
   const { data: user, error } = await supabase.from('users')
@@ -41,23 +46,54 @@ export async function sendAiFriendMessage(userId: string, history: AiFriendMessa
   const entitlement = await getAiFriendSubscriptionStatus(userId);
   if (!entitlement.can_chat) throw Forbidden('Your AI Friend access is inactive or expired. Start your free trial or choose a paid plan.');
   if (!env.GEMINI_API_KEY) throw new AppError('AI Friend is not configured yet. Please contact support.', 503, 'AI_FRIEND_NOT_CONFIGURED');
+
+  const safeHistory = history.slice(-MAX_HISTORY_MESSAGES).map((item) => ({
+    role: item.role,
+    parts: [{ text: item.text.slice(0, MAX_HISTORY_MESSAGE_CHARS) }],
+  }));
   const contents = [
-    ...history.slice(-12).map((item) => ({ role: item.role, parts: [{ text: item.text.slice(0, 2000) }] })),
-    { role: 'user', parts: [{ text: message }] },
+    ...safeHistory,
+    { role: 'user', parts: [{ text: message.slice(0, 1500) }] },
   ];
   const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/' +
-    encodeURIComponent(env.GEMINI_MODEL) + ':generateContent?key=' + encodeURIComponent(env.GEMINI_API_KEY);
-  const response = await fetch(endpoint, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: 'You are YorBuddy AI Friend, a warm, respectful, supportive AI companion for adults in India. You are strictly platonic: never act as a dating, romantic, sexual, escort, or meet-up service. Be transparent that you are AI, not a human. Do not claim to be a therapist, doctor, or emergency service. Encourage respectful, safe, real-world choices and public places for any human meetups. Never request passwords, OTPs, Aadhaar numbers, PAN numbers, or identity document images. Keep replies concise, kind, culturally aware, and non-judgmental.' }] },
-      contents, generationConfig: { temperature: 0.75, maxOutputTokens: 700 },
-    }),
-    signal: AbortSignal.timeout(25000),
-  });
-  const payload = await response.json() as any;
+    encodeURIComponent(env.GEMINI_MODEL) + ':generateContent';
+  let response: Response;
+  try {
+    response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': env.GEMINI_API_KEY,
+      },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: 'You are YorBuddy AI Friend, a warm, respectful, supportive AI companion for adults in India. You are strictly platonic: never act as a dating, romantic, sexual, escort, or meet-up service. Be transparent that you are AI, not a human. Do not claim to be a therapist, doctor, or emergency service. Encourage respectful, safe, real-world choices and public places for any human meetups. Never request passwords, OTPs, Aadhaar numbers, PAN numbers, or identity document images. Keep replies concise, kind, culturally aware, and non-judgmental.' }] },
+        contents,
+        generationConfig: { temperature: 0.7, maxOutputTokens: MAX_OUTPUT_TOKENS },
+      }),
+      signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
+    });
+  } catch (error) {
+    const timedOut = error instanceof Error && error.name === 'TimeoutError';
+    console.error('[AI_FRIEND] Gemini network failure:', timedOut ? 'timeout' : 'request failed');
+    throw new AppError(
+      timedOut ? 'AI Friend is taking too long to respond. Please try again.' : 'AI Friend is temporarily unavailable. Please try again shortly.',
+      503,
+      timedOut ? 'AI_FRIEND_TIMEOUT' : 'AI_FRIEND_UNAVAILABLE'
+    );
+  }
+
+  let payload: any = {};
+  try {
+    payload = await response.json();
+  } catch {
+    console.error('[AI_FRIEND] Gemini returned a non-JSON response:', response.status);
+  }
   if (!response.ok) {
-    console.error('[AI_FRIEND] Gemini request failed:', response.status, payload?.error?.message || 'Unknown error');
+    const upstreamStatus = payload?.error?.status;
+    if (response.status === 429 || upstreamStatus === 'RESOURCE_EXHAUSTED') {
+      throw new AppError('AI Friend has reached its free usage limit for now. Please wait and try again later.', 429, 'AI_FRIEND_QUOTA_EXCEEDED');
+    }
+    console.error('[AI_FRIEND] Gemini request failed:', response.status, upstreamStatus || 'upstream error');
     throw new AppError('AI Friend could not respond right now. Please try again shortly.', 502, 'AI_FRIEND_UPSTREAM_ERROR');
   }
   const reply = payload?.candidates?.[0]?.content?.parts?.map((part: { text?: string }) => part.text || '').join('').trim();
