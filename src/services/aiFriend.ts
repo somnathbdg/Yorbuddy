@@ -32,7 +32,7 @@ class AiFriendService {
     return response.data.data;
   }
   async sendMessage(message: string, history: AiFriendMessage[]): Promise<string> {
-    const response = await apiClient.post('/ai-friend/chat', { message, history });
+    const response = await apiClient.post('/ai-friend/chat', { message, history }, { timeout: 30000 });
     return response.data.data.reply;
   }
   async startTrial() {
