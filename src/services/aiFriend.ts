@@ -26,7 +26,7 @@ class AiFriendService {
     const response = await apiClient.get('/ai-friend/status');
     return response.data.data;
   }
-  async sendMessage(message: string, history: AiFriendMessage[]): Promise<string> {
+  async confirmAdultStatus() {\n    const response = await apiClient.post('/ai-friend/adult-confirmation', {});\n    return response.data.data;\n  }\n  async sendMessage(message: string, history: AiFriendMessage[]): Promise<string> {
     const response = await apiClient.post('/ai-friend/chat', { message, history });
     return response.data.data.reply;
   }
