@@ -3,7 +3,7 @@ import Razorpay from 'razorpay';
 import { getSupabase } from '../config/database.js';
 import { env } from '../config/env.js';
 import { AppError, BadRequest, Conflict, Forbidden, NotFound } from '../middleware/errorHandler.js';
-import { calculateAiFriendExpiry, getAiFriendPlan, hashVerifiedPhone, isAiFriendSubscriptionActive, isTrialAlreadyUsed, AiFriendPlanId } from './aiFriendEntitlement.js';
+import { calculateAiFriendExpiry, getAiFriendPlan, hashVerifiedPhone, isAiFriendSubscriptionActive, isTrialAlreadyUsed, AiFriendPlanId, verifyAiFriendPaymentSignature } from './aiFriendEntitlement.js';
 import { getAiFriendVerification } from './aiFriendService.js';
 
 let razorpayInstance: any = null;
@@ -141,11 +141,7 @@ export async function verifyAiFriendPayment(userId: string, input: { razorpay_or
   }
   if (subscription.status !== 'created') throw new Conflict('This AI Friend payment order is no longer payable.');
 
-  const expected = crypto.createHmac('sha256', env.RAZORPAY_KEY_SECRET)
-    .update(`${input.razorpay_order_id}|${input.razorpay_payment_id}`).digest();
-  let supplied: Buffer;
-  try { supplied = Buffer.from(input.razorpay_signature, 'hex'); } catch { throw BadRequest('Invalid payment signature.'); }
-  if (supplied.length !== expected.length || !crypto.timingSafeEqual(expected, supplied)) {
+  if (!verifyAiFriendPaymentSignature(input.razorpay_order_id, input.razorpay_payment_id, input.razorpay_signature, env.RAZORPAY_KEY_SECRET)) {
     await supabase.from('ai_friend_subscriptions').update({ status: 'failed' }).eq('id', subscription.id).eq('status', 'created');
     throw BadRequest('Invalid payment signature.');
   }
