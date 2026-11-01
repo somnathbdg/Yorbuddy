@@ -17,13 +17,13 @@ export async function getAiFriendVerification(userId: string) {
     .single();
 
   if (userError || !user) throw new AppError('Unable to verify account status.', 503, 'VERIFICATION_UNAVAILABLE');
-  if (!user.is_active) throw new Forbidden('Your account is inactive.');
+  if (!user.is_active) throw Forbidden('Your account is inactive.');
 
   const { data: kycRows, error: kycError } = await supabase
     .from('verifications')
     .select('status')
     .eq('user_id', userId)
-    .order('submitted_at', { ascending: false, nullsLast: true })
+    .order('submitted_at', { ascending: false })
     .limit(1);
 
   if (kycError) throw new AppError('Unable to verify KYC status.', 503, 'KYC_STATUS_UNAVAILABLE');
