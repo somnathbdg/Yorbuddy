@@ -12,6 +12,8 @@ export interface AiFriendSubscriptionStatus {
   verification: AiFriendVerificationStatus;
   subscription: { id: string; plan_id: string; amount_paise: number; status: string; starts_at: string; expires_at: string } | null;
   has_active_subscription: boolean;
+  included_with_membership: boolean;
+  yorbuddy_membership: { plan_id: string; expires_at: string | null } | null;
   trial_available: boolean;
   trial_used: boolean;
   can_chat: boolean;
