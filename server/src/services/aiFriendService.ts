@@ -44,11 +44,11 @@ export async function getAiFriendVerification(userId: string) {
 export async function sendAiFriendMessage(userId: string, history: AiFriendMessage[], message: string): Promise<string> {
   const verification = await getAiFriendVerification(userId);
   if (!verification.is_fully_verified) {
-    throw new Forbidden('AI Friend chat is locked. Complete Email OTP, Mobile OTP and receive KYC approval to continue.');
+    throw Forbidden('AI Friend chat is locked. Complete Email OTP, Mobile OTP and receive KYC approval to continue.');
   }
   const entitlement = await getAiFriendSubscriptionStatus(userId);
   if (!entitlement.can_chat) {
-    throw new Forbidden('Your AI Friend plan is inactive or expired. Start your one-time free trial or choose a paid plan.');
+    throw Forbidden('Your AI Friend plan is inactive or expired. Start your one-time free trial or choose a paid plan.');
   }
   if (!env.GEMINI_API_KEY) {
     throw new AppError('AI Friend is not configured yet. Please contact support.', 503, 'AI_FRIEND_NOT_CONFIGURED');
