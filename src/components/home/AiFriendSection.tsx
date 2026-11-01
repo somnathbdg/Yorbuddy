@@ -5,7 +5,8 @@ import { membershipService } from '../../services/membership';
 import { aiFriendService, AiFriendMessage, AiFriendSubscriptionStatus } from '../../services/aiFriend';
 
 export const AiFriendSection: React.FC = () => {
-  const { isAuthenticated, setIsRegisterModalOpen, setRegisterStep, setAuthMode, setActiveTab } = useApp();\n  const [confirmingAge, setConfirmingAge] = useState(false);
+  const { isAuthenticated, setIsRegisterModalOpen, setRegisterStep, setAuthMode, setActiveTab } = useApp();
+  const [confirmingAge, setConfirmingAge] = useState(false);
   const [status, setStatus] = useState<AiFriendSubscriptionStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
