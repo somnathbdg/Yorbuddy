@@ -25,7 +25,7 @@ function assertVerified(status: Awaited<ReturnType<typeof getAiFriendVerificatio
 async function getUserPhone(userId: string): Promise<string> {
   const supabase = getSupabase();
   const { data, error } = await supabase.from('users').select('phone').eq('id', userId).single();
-  if (error || !data?.phone) throw new Forbidden('A verified mobile number is required for AI Friend access.');
+  if (error || !data?.phone) throw Forbidden('A verified mobile number is required for AI Friend access.');
   return data.phone;
 }
 
@@ -75,7 +75,7 @@ export async function startAiFriendFreeTrial(userId: string) {
   const phoneHash = hashVerifiedPhone(await getUserPhone(userId));
   const state = await getAiFriendSubscriptionStatus(userId);
   if (state.has_active_subscription) throw Conflict('You already have an active AI Friend plan.');
-  if (state.trial_used || !state.trial_available) throw new Conflict('The 24-hour AI Friend free trial has already been used for this verified mobile number.');
+  if (state.trial_used || !state.trial_available) throw Conflict('The 24-hour AI Friend free trial has already been used for this verified mobile number.');
 
   const startsAt = new Date();
   const expiresAt = calculateAiFriendExpiry('FREE_TRIAL_1D', startsAt);
@@ -90,7 +90,7 @@ export async function startAiFriendFreeTrial(userId: string) {
     expires_at: expiresAt.toISOString(),
   }).select('id, plan_id, status, starts_at, expires_at').single();
 
-  if (error?.code === '23505') throw new Conflict('The free trial has already been claimed for this verified mobile number.');
+  if (error?.code === '23505') throw Conflict('The free trial has already been claimed for this verified mobile number.');
   if (error || !data) throw new AppError('Unable to start the AI Friend free trial.', 503, 'TRIAL_START_FAILED');
   return data;
 }
@@ -102,7 +102,7 @@ export async function createAiFriendPaymentOrder(userId: string, requestedPlanId
   if (!plan || plan.id === 'FREE_TRIAL_1D') throw BadRequest('Select a valid paid AI Friend plan.');
   const supabase = getSupabase();
   const state = await getAiFriendSubscriptionStatus(userId);
-  if (state.has_active_subscription) throw new Conflict('You already have an active AI Friend plan.');
+  if (state.has_active_subscription) throw Conflict('You already have an active AI Friend plan.');
   const phoneHash = hashVerifiedPhone(await getUserPhone(userId));
   const razorpay = getRazorpay();
   const receipt = `aif_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
@@ -139,7 +139,7 @@ export async function verifyAiFriendPayment(userId: string, input: { razorpay_or
   if (subscription.status === 'success') {
     return { id: subscription.id, status: 'success', plan_id: subscription.plan_id, expires_at: subscription.expires_at };
   }
-  if (subscription.status !== 'created') throw new Conflict('This AI Friend payment order is no longer payable.');
+  if (subscription.status !== 'created') throw Conflict('This AI Friend payment order is no longer payable.');
 
   if (!verifyAiFriendPaymentSignature(input.razorpay_order_id, input.razorpay_payment_id, input.razorpay_signature, env.RAZORPAY_KEY_SECRET)) {
     await supabase.from('ai_friend_subscriptions').update({ status: 'failed' }).eq('id', subscription.id).eq('status', 'created');
@@ -154,7 +154,7 @@ export async function verifyAiFriendPayment(userId: string, input: { razorpay_or
     razorpayPayment.currency !== 'INR' ||
     razorpayPayment.status !== 'captured'
   ) {
-    throw new Conflict('Razorpay has not confirmed a captured payment for this AI Friend order.');
+    throw Conflict('Razorpay has not confirmed a captured payment for this AI Friend order.');
   }
 
   const now = new Date();
@@ -168,6 +168,6 @@ export async function verifyAiFriendPayment(userId: string, input: { razorpay_or
     updated_at: now.toISOString(),
   }).eq('id', subscription.id).eq('status', 'created')
     .select('id, plan_id, status, starts_at, expires_at').single();
-  if (updateError || !updated) throw new Conflict('Payment is already being processed. Refresh your subscription status.');
+  if (updateError || !updated) throw Conflict('Payment is already being processed. Refresh your subscription status.');
   return updated;
 }
