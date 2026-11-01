@@ -9,6 +9,7 @@ import {
   isTrialAlreadyUsed,
   normalizeVerifiedPhone,
   verifyAiFriendPaymentSignature,
+  isPaidYorBuddyMembershipActive,
 } from './src/services/aiFriendEntitlement.js';
 
 test('AI Friend pricing uses exact INR amounts and durations', () => {
@@ -65,4 +66,13 @@ test('Razorpay HMAC verifier accepts only the correct signature', async () => {
   assert.equal(verifyAiFriendPaymentSignature(orderId, paymentId, '0'.repeat(64), secret), false);
   assert.equal(verifyAiFriendPaymentSignature(orderId, paymentId, signature, 'wrong_secret'), false);
   assert.equal(verifyAiFriendPaymentSignature(orderId, paymentId, 'not-hex', secret), false);
+});
+
+test('active paid YorBuddy membership includes AI Friend at no extra charge', () => {
+  const now = new Date('2026-11-01T10:00:00.000Z');
+  assert.equal(isPaidYorBuddyMembershipActive('WEEK_1', 'success', '2026-11-02T10:00:00.000Z', now), true);
+  assert.equal(isPaidYorBuddyMembershipActive('MONTH_1', 'success', null, now), true);
+  assert.equal(isPaidYorBuddyMembershipActive('WEEK_1', 'success', '2026-11-01T09:59:59.000Z', now), false);
+  assert.equal(isPaidYorBuddyMembershipActive('WEEK_1', 'created', '2026-11-02T10:00:00.000Z', now), false);
+  assert.equal(isPaidYorBuddyMembershipActive('FREE_ACCESS_10D', 'success', '2026-11-02T10:00:00.000Z', now), false);
 });
