@@ -3,7 +3,7 @@ import Razorpay from 'razorpay';
 import { getSupabase } from '../config/database.js';
 import { env } from '../config/env.js';
 import { AppError, BadRequest, Conflict, Forbidden, NotFound } from '../middleware/errorHandler.js';
-import { calculateAiFriendExpiry, getAiFriendPlan, hashVerifiedPhone, isAiFriendSubscriptionActive, isTrialAlreadyUsed, AiFriendPlanId, verifyAiFriendPaymentSignature } from './aiFriendEntitlement.js';
+import { calculateAiFriendExpiry, getAiFriendPlan, hashVerifiedPhone, isAiFriendSubscriptionActive, isTrialAlreadyUsed, AiFriendPlanId, verifyAiFriendPaymentSignature, isPaidYorBuddyMembershipActive } from './aiFriendEntitlement.js';
 import { getAiFriendVerification } from './aiFriendService.js';
 
 let razorpayInstance: any = null;
@@ -41,8 +41,7 @@ export async function getAiFriendSubscriptionStatus(userId: string) {
   if (membershipError) throw new AppError('Unable to check YorBuddy membership.', 503, 'MEMBERSHIP_STATUS_UNAVAILABLE');
   const nowForMembership = new Date();
   const membership = (memberships || []).find((item: any) =>
-    item.plan_id !== 'FREE_ACCESS_10D' &&
-    (!item.membership_expiry_date || new Date(item.membership_expiry_date).getTime() > nowForMembership.getTime())
+    isPaidYorBuddyMembershipActive(item.plan_id, item.status, item.membership_expiry_date, nowForMembership)
   ) || null;
   const includedWithMembership = !!membership;
   const phone = await getUserPhone(userId);
