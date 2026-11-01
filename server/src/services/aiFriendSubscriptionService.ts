@@ -5,6 +5,7 @@ import { env } from '../config/env.js';
 import { AppError, BadRequest, Conflict, Forbidden, NotFound } from '../middleware/errorHandler.js';
 import { calculateAiFriendExpiry, getAiFriendPlan, hashVerifiedPhone, isAiFriendSubscriptionActive, isTrialAlreadyUsed, AiFriendPlanId, verifyAiFriendPaymentSignature } from './aiFriendEntitlement.js';
 import { getAiFriendVerification } from './aiFriendService.js';
+import { checkUserMembership } from './membershipService.js';
 
 let razorpayInstance: any = null;
 function getRazorpay(): any {
@@ -32,6 +33,9 @@ async function getUserPhone(userId: string): Promise<string> {
 export async function getAiFriendSubscriptionStatus(userId: string) {
   const supabase = getSupabase();
   const verification = await getAiFriendVerification(userId);
+  const { isActive: membershipActive, membership } = await checkUserMembership(supabase, userId);
+  // AI Friend is included with every active paid YorBuddy subscription; the auto-granted 10-day free access is not a paid subscription.
+  const includedWithMembership = membershipActive && membership?.plan_id !== 'FREE_ACCESS_10D';
   const phone = await getUserPhone(userId);
   const phoneHash = hashVerifiedPhone(phone);
 
@@ -55,10 +59,12 @@ export async function getAiFriendSubscriptionStatus(userId: string) {
   return {
     verification,
     subscription: active,
-    has_active_subscription: !!active,
+    has_active_subscription: !!active || includedWithMembership,
+    included_with_membership: includedWithMembership,
+    yorbuddy_membership: includedWithMembership ? { plan_id: membership.plan_id, expires_at: membership.membership_expiry_date } : null,
     trial_available: verification.is_fully_verified && !trialUsed && (count || 0) === 0,
     trial_used: trialUsed || (count || 0) > 0,
-    can_chat: verification.is_fully_verified && !!active,
+    can_chat: verification.is_fully_verified && (!!active || includedWithMembership),
     plans: [
       { id: 'FREE_TRIAL_1D', name: 'Free Trial', amount: 0, currency: 'INR', duration_hours: 24 },
       { id: 'DAY_1', name: '1 Day', amount: 49, currency: 'INR', duration_days: 1 },
@@ -74,6 +80,8 @@ export async function startAiFriendFreeTrial(userId: string) {
   const supabase = getSupabase();
   const phoneHash = hashVerifiedPhone(await getUserPhone(userId));
   const state = await getAiFriendSubscriptionStatus(userId);
+  if (state.included_with_membership) throw Conflict('AI Friend is already included with your active YorBuddy subscription. No extra payment is required.');
+  if (state.included_with_membership) throw Conflict('AI Friend is already included with your active YorBuddy subscription. No extra payment is required.');
   if (state.has_active_subscription) throw Conflict('You already have an active AI Friend plan.');
   if (state.trial_used || !state.trial_available) throw Conflict('The 24-hour AI Friend free trial has already been used for this verified mobile number.');
 
