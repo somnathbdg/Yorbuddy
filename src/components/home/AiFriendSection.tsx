@@ -140,7 +140,8 @@ export const AiFriendSection: React.FC = () => {
               {status?.trial_used && <p className="text-xs text-slate-400">Your one-time free trial has already been used. You can choose a paid plan.</p>}
             </div>
           )}
-          {canChat && status?.subscription && <p className="text-sm text-emerald-200">Active: {status.subscription.plan_id.replaceAll('_', ' ')} · Expires {new Date(status.subscription.expires_at).toLocaleString()}</p>}
+          {canChat && status?.included_with_membership && <p className="text-sm text-emerald-200">AI Friend is included with your active YorBuddy subscription — no extra charge.</p>}
+          {canChat && !status?.included_with_membership && status?.subscription && <p className="text-sm text-emerald-200">Active: {status.subscription.plan_id.replaceAll('_', ' ')} · Expires {new Date(status.subscription.expires_at).toLocaleString()}</p>}
         </div>
 
         <div className="rounded-3xl border border-white/10 bg-white/[0.07] p-4 shadow-2xl shadow-black/30 backdrop-blur-xl sm:p-6">
