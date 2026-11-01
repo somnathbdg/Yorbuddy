@@ -17,16 +17,16 @@ function getRazorpay(): any {
 }
 
 function assertVerified(status: Awaited<ReturnType<typeof getAiFriendVerification>>) {
-  if (!status.is_fully_verified) {
-    throw Forbidden('Complete Email OTP, Mobile OTP and receive KYC approval before starting an AI Friend plan.');
-  }
+  if (!status.is_fully_verified) throw Forbidden('Verify either your email address or mobile number before starting an AI Friend plan.');
+  if (!status.adult_confirmed) throw Forbidden('Please confirm that you are 18 or older before starting an AI Friend plan.');
 }
 
-async function getUserPhone(userId: string): Promise<string> {
+async function getTrialIdentityHash(userId: string): Promise<string> {
   const supabase = getSupabase();
-  const { data, error } = await supabase.from('users').select('phone').eq('id', userId).single();
-  if (error || !data?.phone) throw Forbidden('A verified mobile number is required for AI Friend access.');
-  return data.phone;
+  const { data, error } = await supabase.from('users').select('phone, phone_verified_at').eq('id', userId).single();
+  if (error || !data) throw new AppError('Unable to check AI Friend trial eligibility.', 503, 'TRIAL_STATUS_UNAVAILABLE');
+  if (data.phone_verified_at && data.phone) return hashVerifiedPhone(data.phone);
+  return crypto.createHash('sha256').update('yorbuddy-ai-friend-account:' + userId).digest('hex');
 }
 
 export async function getAiFriendSubscriptionStatus(userId: string) {
@@ -44,8 +44,7 @@ export async function getAiFriendSubscriptionStatus(userId: string) {
     isPaidYorBuddyMembershipActive(item.plan_id, item.status, item.membership_expiry_date, nowForMembership)
   ) || null;
   const includedWithMembership = !!membership;
-  const phone = await getUserPhone(userId);
-  const phoneHash = hashVerifiedPhone(phone);
+  const phoneHash = await getTrialIdentityHash(userId);
 
   const { data: rows, error } = await supabase
     .from('ai_friend_subscriptions')
@@ -70,9 +69,9 @@ export async function getAiFriendSubscriptionStatus(userId: string) {
     has_active_subscription: !!active || includedWithMembership,
     included_with_membership: includedWithMembership,
     yorbuddy_membership: includedWithMembership ? { plan_id: membership.plan_id, expires_at: membership.membership_expiry_date } : null,
-    trial_available: verification.is_fully_verified && !trialUsed && (count || 0) === 0,
+    trial_available: verification.is_fully_verified && verification.adult_confirmed && !trialUsed && (count || 0) === 0,
     trial_used: trialUsed || (count || 0) > 0,
-    can_chat: verification.is_fully_verified && (!!active || includedWithMembership),
+    can_chat: verification.is_fully_verified && verification.adult_confirmed && (!!active || includedWithMembership),
     plans: [
       { id: 'FREE_TRIAL_1D', name: 'Free Trial', amount: 0, currency: 'INR', duration_hours: 24 },
       { id: 'DAY_1', name: '1 Day', amount: 49, currency: 'INR', duration_days: 1 },
@@ -86,12 +85,11 @@ export async function startAiFriendFreeTrial(userId: string) {
   const verification = await getAiFriendVerification(userId);
   assertVerified(verification);
   const supabase = getSupabase();
-  const phoneHash = hashVerifiedPhone(await getUserPhone(userId));
+  const phoneHash = await getTrialIdentityHash(userId);
   const state = await getAiFriendSubscriptionStatus(userId);
   if (state.included_with_membership) throw Conflict('AI Friend is already included with your active YorBuddy subscription. No extra payment is required.');
-  if (state.included_with_membership) throw Conflict('AI Friend is already included with your active YorBuddy subscription. No extra payment is required.');
   if (state.has_active_subscription) throw Conflict('You already have an active AI Friend plan.');
-  if (state.trial_used || !state.trial_available) throw Conflict('The 24-hour AI Friend free trial has already been used for this verified mobile number.');
+  if (state.trial_used || !state.trial_available) throw Conflict('The 24-hour AI Friend free trial has already been used.');
 
   const startsAt = new Date();
   const expiresAt = calculateAiFriendExpiry('FREE_TRIAL_1D', startsAt);
@@ -106,7 +104,7 @@ export async function startAiFriendFreeTrial(userId: string) {
     expires_at: expiresAt.toISOString(),
   }).select('id, plan_id, status, starts_at, expires_at').single();
 
-  if (error?.code === '23505') throw Conflict('The free trial has already been claimed for this verified mobile number.');
+  if (error?.code === '23505') throw Conflict('The free trial has already been claimed for this account or verified mobile number.');
   if (error || !data) throw new AppError('Unable to start the AI Friend free trial.', 503, 'TRIAL_START_FAILED');
   return data;
 }
@@ -119,7 +117,7 @@ export async function createAiFriendPaymentOrder(userId: string, requestedPlanId
   const supabase = getSupabase();
   const state = await getAiFriendSubscriptionStatus(userId);
   if (state.has_active_subscription) throw Conflict('You already have an active AI Friend plan.');
-  const phoneHash = hashVerifiedPhone(await getUserPhone(userId));
+  const phoneHash = await getTrialIdentityHash(userId);
   const razorpay = getRazorpay();
   const receipt = `aif_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
   const order = await razorpay.orders.create({
