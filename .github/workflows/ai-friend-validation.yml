@@ -1,4 +1,5 @@
 name: AI Friend build and security checks
+# Lockfiles are normalized by the dependency-audit job before the strict audit step.
 
 on:
   push:
