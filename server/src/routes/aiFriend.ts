@@ -3,8 +3,17 @@ import { z } from 'zod';
 import { authenticate } from '../middleware/auth.js';
 import { BadRequest } from '../middleware/errorHandler.js';
 import { getAiFriendVerification, sendAiFriendMessage, AiFriendMessage } from '../services/aiFriendService.js';
+import { createAiFriendPaymentOrder, getAiFriendSubscriptionStatus, startAiFriendFreeTrial, verifyAiFriendPayment } from '../services/aiFriendSubscriptionService.js';
 
 const router = Router();
+
+const paymentSchema = z.object({
+  razorpay_order_id: z.string().min(1).max(100),
+  razorpay_payment_id: z.string().min(1).max(100),
+  razorpay_signature: z.string().min(1).max(256),
+}).strict();
+
+const planSchema = z.object({ plan_id: z.enum(['DAY_1', 'WEEK_1', 'MONTH_1']) }).strict();
 
 const chatSchema = z.object({
   message: z.string().trim().min(1).max(2000),
@@ -16,11 +25,43 @@ const chatSchema = z.object({
 
 router.get('/status', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const status = await getAiFriendVerification(req.user!.id);
+    const status = await getAiFriendSubscriptionStatus(req.user!.id);
     res.status(200).json({ data: status });
   } catch (error) {
     next(error);
   }
+});
+
+router.get('/subscription/me', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = await getAiFriendSubscriptionStatus(req.user!.id);
+    res.status(200).json({ data });
+  } catch (error) { next(error); }
+});
+
+router.post('/subscription/trial', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = await startAiFriendFreeTrial(req.user!.id);
+    res.status(201).json({ data, message: 'Your 24-hour AI Friend free trial has started.' });
+  } catch (error) { next(error); }
+});
+
+router.post('/subscription/create-order', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const parsed = planSchema.safeParse(req.body);
+    if (!parsed.success) throw BadRequest('Choose a valid AI Friend paid plan.');
+    const data = await createAiFriendPaymentOrder(req.user!.id, parsed.data.plan_id);
+    res.status(201).json({ data });
+  } catch (error) { next(error); }
+});
+
+router.post('/subscription/verify', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const parsed = paymentSchema.safeParse(req.body);
+    if (!parsed.success) throw BadRequest('Payment verification details are invalid.');
+    const data = await verifyAiFriendPayment(req.user!.id, parsed.data);
+    res.status(200).json({ data, message: 'AI Friend payment verified successfully.' });
+  } catch (error) { next(error); }
 });
 
 router.post('/chat', authenticate, async (req: Request, res: Response, next: NextFunction) => {
