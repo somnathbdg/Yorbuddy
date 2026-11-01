@@ -150,7 +150,7 @@ async function getUserVerificationStatus(supabase: any, userId: string): Promise
 
 export async function requestEmailCode(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    requestEmailCodeSchema.parse(req.body);
+    requestEmailCodeSchema.parse(req.body ?? {});
     const userId = req.user!.id;
     const supabase = getSupabase();
 

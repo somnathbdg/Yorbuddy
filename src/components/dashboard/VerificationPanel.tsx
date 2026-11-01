@@ -28,7 +28,7 @@ export const EmailVerificationPanel: React.FC<EmailVerificationProps> = ({ onSta
   const [isVerifying, setIsVerifying] = useState(false);
   const [code, setCode] = useState('');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [devCode, setDevCode] = useState<string | null>(null);
+  const [codeSent, setCodeSent] = useState(false);
 
   useEffect(() => {
     checkStatus();
@@ -48,13 +48,11 @@ export const EmailVerificationPanel: React.FC<EmailVerificationProps> = ({ onSta
   const handleSendCode = async () => {
     setIsSendingCode(true);
     setMessage(null);
-    setDevCode(null);
+    setCodeSent(false);
     try {
       const res = await userService.requestEmailCode();
       setMessage({ type: 'success', text: res.message });
-      if (res.dev_code) {
-        setDevCode(res.dev_code);
-      }
+      setCodeSent(true);
     } catch (err: any) {
       const apiError = err.response?.data?.error;
       setMessage({ type: 'error', text: apiError?.message || 'Failed to send code.' });
@@ -120,7 +118,7 @@ export const EmailVerificationPanel: React.FC<EmailVerificationProps> = ({ onSta
 
       {!isVerified && (
         <>
-          {!devCode ? (
+          {!codeSent ? (
             <button
               onClick={handleSendCode}
               disabled={isSendingCode}
@@ -145,9 +143,6 @@ export const EmailVerificationPanel: React.FC<EmailVerificationProps> = ({ onSta
                   placeholder="000000"
                   className="w-full px-4 py-3 text-center text-2xl font-mono font-bold tracking-widest bg-white border border-blue-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
-                <p className="text-[10px] text-blue-600 mt-2 text-center">
-                  Dev mode — code: <span className="font-mono font-bold">{devCode}</span>
-                </p>
               </div>
 
               <button
@@ -164,7 +159,7 @@ export const EmailVerificationPanel: React.FC<EmailVerificationProps> = ({ onSta
               </button>
 
               <button
-                onClick={() => { setDevCode(null); setCode(''); }}
+                onClick={() => { setCodeSent(false); setCode(''); void handleSendCode(); }}
                 className="w-full py-2 text-xs text-blue-600 hover:text-blue-700 font-medium"
               >
                 Resend Code
@@ -207,7 +202,7 @@ export const PhoneVerificationPanel: React.FC<PhoneVerificationProps> = ({ onSta
   const [phone, setPhone] = useState('');
   const [showPhoneInput, setShowPhoneInput] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [devCode, setDevCode] = useState<string | null>(null);
+  const [codeSent, setCodeSent] = useState(false);
 
   useEffect(() => {
     checkStatus();
@@ -231,11 +226,11 @@ export const PhoneVerificationPanel: React.FC<PhoneVerificationProps> = ({ onSta
     }
     setIsSendingCode(true);
     setMessage(null);
-    setDevCode(null);
+    setCodeSent(false);
     try {
       const res = await userService.requestPhoneCode(phone);
       setMessage({ type: 'success', text: res.message });
-      setDevCode(res.dev_code || null);
+      setCodeSent(true);
       setShowPhoneInput(false);
     } catch (err: any) {
       const apiError = err.response?.data?.error;
@@ -333,7 +328,7 @@ export const PhoneVerificationPanel: React.FC<PhoneVerificationProps> = ({ onSta
                 Cancel
               </button>
             </div>
-          ) : devCode ? (
+          ) : codeSent ? (
             <div className="space-y-3">
               <div className="p-3 rounded-xl bg-blue-50 border border-blue-200">
                 <p className="text-xs text-blue-700 font-semibold mb-2">Enter the 6-digit OTP:</p>
@@ -345,9 +340,6 @@ export const PhoneVerificationPanel: React.FC<PhoneVerificationProps> = ({ onSta
                   placeholder="000000"
                   className="w-full px-4 py-3 text-center text-2xl font-mono font-bold tracking-widest bg-white border border-blue-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
-                <p className="text-[10px] text-blue-600 mt-2 text-center">
-                  Dev mode — OTP: <span className="font-mono font-bold">{devCode}</span>
-                </p>
               </div>
 
               <button
@@ -364,7 +356,7 @@ export const PhoneVerificationPanel: React.FC<PhoneVerificationProps> = ({ onSta
               </button>
 
               <button
-                onClick={() => { setDevCode(null); setShowPhoneInput(true); setCode(''); }}
+                onClick={() => { setCodeSent(false); setShowPhoneInput(true); setCode(''); }}
                 className="w-full py-2 text-xs text-blue-600 hover:text-blue-700 font-medium"
               >
                 Resend OTP

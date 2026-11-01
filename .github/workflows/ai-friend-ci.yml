@@ -1,0 +1,32 @@
+name: AI Friend subscription checks
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'server/**'
+      - 'src/services/aiFriend.ts'
+      - 'src/components/home/AiFriendSection.tsx'
+      - '.github/workflows/ai-friend-ci.yml'
+  push:
+    branches: [feature/yorbuddy-ai-friend]
+    paths:
+      - 'server/**'
+      - 'src/services/aiFriend.ts'
+      - 'src/components/home/AiFriendSection.tsx'
+      - '.github/workflows/ai-friend-ci.yml'
+
+jobs:
+  ai-friend-backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm run test:ai-friend
