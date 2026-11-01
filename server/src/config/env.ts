@@ -24,6 +24,8 @@ interface EnvConfig {
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
   GOOGLE_REDIRECT_URI: string;
+  GEMINI_API_KEY: string;
+  GEMINI_MODEL: string;
 }
 
 const requiredEnvVars: (keyof EnvConfig)[] = [
@@ -74,6 +76,8 @@ function loadEnv(): EnvConfig {
     GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || '',
     GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || '',
     GOOGLE_REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3001/api/auth/google/callback',
+    GEMINI_API_KEY: process.env.GEMINI_API_KEY || '',
+    GEMINI_MODEL: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
   };
 }
 
