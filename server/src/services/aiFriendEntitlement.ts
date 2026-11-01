@@ -52,3 +52,13 @@ export function verifyAiFriendPaymentSignature(orderId: string, paymentId: strin
   const supplied = Buffer.from(signature, 'hex');
   return supplied.length === expected.length && timingSafeEqual(expected, supplied);
 }
+
+export function isPaidYorBuddyMembershipActive(
+  planId: string,
+  status: string,
+  expiresAt: string | Date | null,
+  now: Date = new Date()
+): boolean {
+  if (status !== 'success' || planId === 'FREE_ACCESS_10D') return false;
+  return !expiresAt || new Date(expiresAt).getTime() > now.getTime();
+}
