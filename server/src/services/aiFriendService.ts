@@ -1,6 +1,6 @@
 import { getSupabase } from '../config/database.js';
 import { env } from '../config/env.js';
-import { Forbidden, BadRequest, AppError } from '../middleware/errorHandler.js';
+import { Forbidden, AppError } from '../middleware/errorHandler.js';
 
 export interface AiFriendMessage {
   role: 'user' | 'model';
