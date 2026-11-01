@@ -150,6 +150,17 @@ export async function verifyAiFriendPayment(userId: string, input: { razorpay_or
     throw BadRequest('Invalid payment signature.');
   }
 
+  // Confirm payment details with Razorpay as a second check; never trust browser payload alone.
+  const razorpayPayment = await getRazorpay().payments.fetch(input.razorpay_payment_id);
+  if (
+    razorpayPayment.order_id !== input.razorpay_order_id ||
+    razorpayPayment.amount !== subscription.amount_paise ||
+    razorpayPayment.currency !== 'INR' ||
+    razorpayPayment.status !== 'captured'
+  ) {
+    throw new Conflict('Razorpay has not confirmed a captured payment for this AI Friend order.');
+  }
+
   const now = new Date();
   const expiresAt = calculateAiFriendExpiry(subscription.plan_id as AiFriendPlanId, now);
   const { data: updated, error: updateError } = await supabase.from('ai_friend_subscriptions').update({
