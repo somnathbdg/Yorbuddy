@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { authenticate } from '../middleware/auth.js';
 import { BadRequest } from '../middleware/errorHandler.js';
-import { getAiFriendVerification, sendAiFriendMessage, AiFriendMessage } from '../services/aiFriendService.js';
+import { sendAiFriendMessage, AiFriendMessage } from '../services/aiFriendService.js';
 import { createAiFriendPaymentOrder, getAiFriendSubscriptionStatus, startAiFriendFreeTrial, verifyAiFriendPayment } from '../services/aiFriendSubscriptionService.js';
 
 const router = Router();
