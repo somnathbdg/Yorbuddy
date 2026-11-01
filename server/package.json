@@ -9,7 +9,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
-    "test:ai-friend": "npm run build && node --test dist/test-ai-friend-subscription.test.js"
+    "test:ai-friend": "tsx --test test-ai-friend-subscription.test.ts"
   },
   "dependencies": {
     "@sendgrid/mail": "^8.1.4",
