@@ -30,7 +30,8 @@ class AiFriendService {
   async confirmAdultStatus() {
     const response = await apiClient.post('/ai-friend/adult-confirmation', {});
     return response.data.data;
-  }\n  async sendMessage(message: string, history: AiFriendMessage[]): Promise<string> {
+  }
+  async sendMessage(message: string, history: AiFriendMessage[]): Promise<string> {
     const response = await apiClient.post('/ai-friend/chat', { message, history });
     return response.data.data.reply;
   }
