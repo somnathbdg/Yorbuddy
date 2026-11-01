@@ -18,7 +18,7 @@ function getRazorpay(): any {
 
 function assertVerified(status: Awaited<ReturnType<typeof getAiFriendVerification>>) {
   if (!status.is_fully_verified) {
-    throw Forbidden('Complete Email OTP, Mobile OTP and receive KYC approval before starting an AI Friend plan.');
+    throw Forbidden('Verify either your email address or mobile number and confirm you are 18+ before starting an AI Friend plan.');
   }
 }
 
@@ -119,7 +119,7 @@ export async function createAiFriendPaymentOrder(userId: string, requestedPlanId
   const supabase = getSupabase();
   const state = await getAiFriendSubscriptionStatus(userId);
   if (state.has_active_subscription) throw Conflict('You already have an active AI Friend plan.');
-  const phoneHash = hashVerifiedPhone(await getUserPhone(userId));
+  const phoneHash = await getTrialIdentityHash(userId);
   const razorpay = getRazorpay();
   const receipt = `aif_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
   const order = await razorpay.orders.create({
