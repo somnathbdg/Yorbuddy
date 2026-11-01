@@ -16,7 +16,7 @@ export function validate(schema: z.ZodSchema) {
           error: {
             code: 'VALIDATION_ERROR',
             message: 'Request validation failed',
-            details: error.errors.map((e) => ({
+            details: error.issues.map((e) => ({
               field: e.path.join('.'),
               message: e.message,
             })),
@@ -35,7 +35,7 @@ export function validate(schema: z.ZodSchema) {
 export function validateQuery(schema: z.ZodSchema) {
   return (req: Request, res: Response, next: NextFunction) => {
     try {
-      req.query = schema.parse(req.query);
+      req.query = schema.parse(req.query) as Request['query'];
       next();
     } catch (error) {
       if (error instanceof ZodError) {
@@ -43,7 +43,7 @@ export function validateQuery(schema: z.ZodSchema) {
           error: {
             code: 'VALIDATION_ERROR',
             message: 'Query validation failed',
-            details: error.errors.map((e) => ({
+            details: error.issues.map((e) => ({
               field: e.path.join('.'),
               message: e.message,
             })),
@@ -62,7 +62,7 @@ export function validateQuery(schema: z.ZodSchema) {
 export function validateParams(schema: z.ZodSchema) {
   return (req: Request, res: Response, next: NextFunction) => {
     try {
-      req.params = schema.parse(req.params);
+      req.params = schema.parse(req.params) as Request['params'];
       next();
     } catch (error) {
       if (error instanceof ZodError) {
@@ -70,7 +70,7 @@ export function validateParams(schema: z.ZodSchema) {
           error: {
             code: 'VALIDATION_ERROR',
             message: 'URL parameter validation failed',
-            details: error.errors.map((e) => ({
+            details: error.issues.map((e) => ({
               field: e.path.join('.'),
               message: e.message,
             })),
