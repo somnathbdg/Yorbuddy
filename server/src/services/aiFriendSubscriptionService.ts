@@ -5,7 +5,6 @@ import { env } from '../config/env.js';
 import { AppError, BadRequest, Conflict, Forbidden, NotFound } from '../middleware/errorHandler.js';
 import { calculateAiFriendExpiry, getAiFriendPlan, hashVerifiedPhone, isAiFriendSubscriptionActive, isTrialAlreadyUsed, AiFriendPlanId, verifyAiFriendPaymentSignature } from './aiFriendEntitlement.js';
 import { getAiFriendVerification } from './aiFriendService.js';
-import { checkUserMembership } from './membershipService.js';
 
 let razorpayInstance: any = null;
 function getRazorpay(): any {
@@ -33,9 +32,19 @@ async function getUserPhone(userId: string): Promise<string> {
 export async function getAiFriendSubscriptionStatus(userId: string) {
   const supabase = getSupabase();
   const verification = await getAiFriendVerification(userId);
-  const { isActive: membershipActive, membership } = await checkUserMembership(supabase, userId);
-  // AI Friend is included with every active paid YorBuddy subscription; the auto-granted 10-day free access is not a paid subscription.
-  const includedWithMembership = membershipActive && membership?.plan_id !== 'FREE_ACCESS_10D';
+  // AI Friend is included with any currently active paid YorBuddy membership. Ignore the auto-granted 10-day free access.
+  const { data: memberships, error: membershipError } = await supabase
+    .from('memberships')
+    .select('plan_id, membership_expiry_date, status')
+    .eq('user_id', userId)
+    .eq('status', 'success');
+  if (membershipError) throw new AppError('Unable to check YorBuddy membership.', 503, 'MEMBERSHIP_STATUS_UNAVAILABLE');
+  const nowForMembership = new Date();
+  const membership = (memberships || []).find((item: any) =>
+    item.plan_id !== 'FREE_ACCESS_10D' &&
+    (!item.membership_expiry_date || new Date(item.membership_expiry_date).getTime() > nowForMembership.getTime())
+  ) || null;
+  const includedWithMembership = !!membership;
   const phone = await getUserPhone(userId);
   const phoneHash = hashVerifiedPhone(phone);
 
