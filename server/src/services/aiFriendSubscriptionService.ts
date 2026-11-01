@@ -18,7 +18,7 @@ function getRazorpay(): any {
 
 function assertVerified(status: Awaited<ReturnType<typeof getAiFriendVerification>>) {
   if (!status.is_fully_verified) {
-    throw new Forbidden('Complete Email OTP, Mobile OTP and receive KYC approval before starting an AI Friend plan.');
+    throw Forbidden('Complete Email OTP, Mobile OTP and receive KYC approval before starting an AI Friend plan.');
   }
 }
 
@@ -74,7 +74,7 @@ export async function startAiFriendFreeTrial(userId: string) {
   const supabase = getSupabase();
   const phoneHash = hashVerifiedPhone(await getUserPhone(userId));
   const state = await getAiFriendSubscriptionStatus(userId);
-  if (state.has_active_subscription) throw new Conflict('You already have an active AI Friend plan.');
+  if (state.has_active_subscription) throw Conflict('You already have an active AI Friend plan.');
   if (state.trial_used || !state.trial_available) throw new Conflict('The 24-hour AI Friend free trial has already been used for this verified mobile number.');
 
   const startsAt = new Date();
