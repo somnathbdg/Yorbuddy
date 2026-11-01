@@ -22,11 +22,12 @@ function assertVerified(status: Awaited<ReturnType<typeof getAiFriendVerificatio
   }
 }
 
-async function getUserPhone(userId: string): Promise<string> {
+async function getTrialIdentityHash(userId: string): Promise<string> {
   const supabase = getSupabase();
-  const { data, error } = await supabase.from('users').select('phone').eq('id', userId).single();
-  if (error || !data?.phone) throw Forbidden('A verified mobile number is required for AI Friend access.');
-  return data.phone;
+  const { data, error } = await supabase.from('users').select('phone, phone_verified_at').eq('id', userId).single();
+  if (error || !data) throw new AppError('Unable to check AI Friend trial eligibility.', 503, 'TRIAL_STATUS_UNAVAILABLE');
+  if (data.phone_verified_at && data.phone) return hashVerifiedPhone(data.phone);
+  return crypto.createHash('sha256').update('yorbuddy-ai-friend-account:' + userId).digest('hex');
 }
 
 export async function getAiFriendSubscriptionStatus(userId: string) {
@@ -44,8 +45,7 @@ export async function getAiFriendSubscriptionStatus(userId: string) {
     isPaidYorBuddyMembershipActive(item.plan_id, item.status, item.membership_expiry_date, nowForMembership)
   ) || null;
   const includedWithMembership = !!membership;
-  const phone = await getUserPhone(userId);
-  const phoneHash = hashVerifiedPhone(phone);
+  const phoneHash = await getTrialIdentityHash(userId);
 
   const { data: rows, error } = await supabase
     .from('ai_friend_subscriptions')
@@ -88,7 +88,6 @@ export async function startAiFriendFreeTrial(userId: string) {
   const supabase = getSupabase();
   const phoneHash = await getTrialIdentityHash(userId);
   const state = await getAiFriendSubscriptionStatus(userId);
-  if (state.included_with_membership) throw Conflict('AI Friend is already included with your active YorBuddy subscription. No extra payment is required.');
   if (state.included_with_membership) throw Conflict('AI Friend is already included with your active YorBuddy subscription. No extra payment is required.');
   if (state.has_active_subscription) throw Conflict('You already have an active AI Friend plan.');
   if (state.trial_used || !state.trial_available) throw Conflict('The 24-hour AI Friend free trial has already been used.');
