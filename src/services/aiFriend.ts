@@ -3,7 +3,8 @@ import { apiClient } from './api';
 export interface AiFriendVerificationStatus {
   email: 'verified' | 'unverified';
   phone: 'verified' | 'unverified';
-  kyc: 'not_submitted' | 'pending' | 'approved' | 'rejected';
+  kyc: 'not_required';
+  adult_confirmed: boolean;
   is_fully_verified: boolean;
 }
 export interface AiFriendMessage { role: 'user' | 'model'; text: string; }
@@ -26,7 +27,10 @@ class AiFriendService {
     const response = await apiClient.get('/ai-friend/status');
     return response.data.data;
   }
-  async confirmAdultStatus() {\n    const response = await apiClient.post('/ai-friend/adult-confirmation', {});\n    return response.data.data;\n  }\n  async sendMessage(message: string, history: AiFriendMessage[]): Promise<string> {
+  async confirmAdultStatus() {
+    const response = await apiClient.post('/ai-friend/adult-confirmation', {});
+    return response.data.data;
+  }\n  async sendMessage(message: string, history: AiFriendMessage[]): Promise<string> {
     const response = await apiClient.post('/ai-friend/chat', { message, history });
     return response.data.data.reply;
   }
