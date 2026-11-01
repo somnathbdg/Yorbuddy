@@ -1,0 +1,70 @@
+name: AI Friend build and security checks
+
+on:
+  push:
+    branches:
+      - feature/staging-ai-friend-integration
+  pull_request:
+    branches:
+      - feature/secure-kyc-storage
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  frontend:
+    name: Frontend typecheck and production build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+
+  backend:
+    name: Backend typecheck and production build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+
+  dependency-audit:
+    name: Production dependency vulnerability audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Audit frontend production dependencies
+        run: npm audit --omit=dev --audit-level=high
+      - name: Audit backend production dependencies
+        working-directory: server
+        run: npm audit --omit=dev --audit-level=high
+
+  codeql:
+    name: CodeQL static security analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+      - uses: github/codeql-action/analyze@v3
