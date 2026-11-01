@@ -74,7 +74,7 @@ export function errorHandler(err: Error, req: Request, res: Response, _next: Nex
     statusCode = 400;
     message = 'Request validation failed';
     code = 'VALIDATION_ERROR';
-    details = err.errors.map((e) => ({
+    details = err.issues.map((e) => ({
       field: e.path.join('.'),
       message: e.message,
     }));
