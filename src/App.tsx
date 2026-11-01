@@ -3,6 +3,7 @@ import { AppProvider, useApp } from './context/AppContext';
 import { Header } from './components/layout/Header';
 import { Footer } from './components/layout/Footer';
 import { Hero } from './components/home/Hero';
+import { AiFriendSection } from './components/home/AiFriendSection';
 import { ActivityCategoryStrip } from './components/home/ActivityCategoryStrip';
 import { FindABuddySection } from './components/home/FindABuddySection';
 import { HowItWorks } from './components/home/HowItWorks';
@@ -94,6 +95,7 @@ const AppContent: React.FC = () => {
             {activeTab === 'home' && (
               <>
                 <Hero />
+                <AiFriendSection />
                 <ActivityCategoryStrip />
                 <FindABuddySection />
                 <HowItWorks />
