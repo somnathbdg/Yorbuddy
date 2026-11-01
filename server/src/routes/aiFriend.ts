@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { authenticate } from '../middleware/auth.js';
 import { BadRequest } from '../middleware/errorHandler.js';
-import { sendAiFriendMessage, AiFriendMessage } from '../services/aiFriendService.js';
+import { sendAiFriendMessage, AiFriendMessage, confirmAiFriendAdultStatus } from '../services/aiFriendService.js';
 import { createAiFriendPaymentOrder, getAiFriendSubscriptionStatus, startAiFriendFreeTrial, verifyAiFriendPayment } from '../services/aiFriendSubscriptionService.js';
 
 const router = Router();
@@ -22,6 +22,13 @@ const chatSchema = z.object({
     text: z.string().min(1).max(2000),
   }).strict()).max(12).optional().default([]),
 }).strict();
+
+router.post('/adult-confirmation', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = await confirmAiFriendAdultStatus(req.user!.id);
+    res.status(200).json({ data, message: '18+ confirmation saved.' });
+  } catch (error) { next(error); }
+});
 
 router.get('/status', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
