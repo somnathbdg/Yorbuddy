@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 
 export const AI_FRIEND_PLANS = {
   FREE_TRIAL_1D: { id: 'FREE_TRIAL_1D', name: 'Free Trial', amountPaise: 0, durationMs: 24 * 60 * 60 * 1000 },
@@ -16,7 +16,10 @@ export function getAiFriendPlan(planId: string) {
 }
 
 export function normalizeVerifiedPhone(phone: string): string {
-  return phone.replace(/[^0-9]/g, '');
+  const digits = phone.replace(/[^0-9]/g, '');
+  if (digits.length === 12 && digits.startsWith('91')) return digits.slice(2);
+  if (digits.length === 11 && digits.startsWith('0')) return digits.slice(1);
+  return digits;
 }
 
 export function hashVerifiedPhone(phone: string): string {
@@ -41,4 +44,11 @@ export function isAiFriendSubscriptionActive(
 
 export function isTrialAlreadyUsed(rows: Array<{ plan_id: string }>): boolean {
   return rows.some((row) => row.plan_id === 'FREE_TRIAL_1D');
+}
+
+export function verifyAiFriendPaymentSignature(orderId: string, paymentId: string, signature: string, secret: string): boolean {
+  if (!orderId || !paymentId || !signature || !secret || !/^[a-f0-9]{64}$/i.test(signature)) return false;
+  const expected = createHmac('sha256', secret).update(`${orderId}|${paymentId}`).digest();
+  const supplied = Buffer.from(signature, 'hex');
+  return supplied.length === expected.length && timingSafeEqual(expected, supplied);
 }
