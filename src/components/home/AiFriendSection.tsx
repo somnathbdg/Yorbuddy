@@ -115,6 +115,7 @@ export const AiFriendSection: React.FC = () => {
   };
 
   const verified = !!status?.verification?.is_fully_verified;
+  const ageConfirmed = !!status?.verification?.adult_confirmed;
   const canChat = isAuthenticated && !!status?.can_chat;
   const paidPlans = [
     { id: 'DAY_1' as const, title: '1 Day', price: '₹49', detail: '24 hours' },
