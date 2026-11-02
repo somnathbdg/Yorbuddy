@@ -3,6 +3,7 @@ import { ArrowRight, Bot, CheckCircle2, LockKeyhole, MessageCircle, ShieldCheck 
 import { useApp } from '../../context/AppContext';
 import { membershipService } from '../../services/membership';
 import { aiFriendService, AiFriendMessage, AiFriendSubscriptionStatus } from '../../services/aiFriend';
+import { authService } from '../../services/auth';
 
 export const AiFriendSection: React.FC = () => {
   const { isAuthenticated, setIsRegisterModalOpen, setRegisterStep, setAuthMode, setActiveTab } = useApp();
@@ -14,6 +15,14 @@ export const AiFriendSection: React.FC = () => {
   const [draft, setDraft] = useState('');
   const [messages, setMessages] = useState<AiFriendMessage[]>([]);
   const [error, setError] = useState('');
+  const [quickRegisterOpen, setQuickRegisterOpen] = useState(false);
+  const [quickName, setQuickName] = useState('');
+  const [quickEmail, setQuickEmail] = useState('');
+  const [quickPhone, setQuickPhone] = useState('');
+  const [quickPassword, setQuickPassword] = useState('');
+  const [quickConfirmPassword, setQuickConfirmPassword] = useState('');
+  const [quickAdultConfirmed, setQuickAdultConfirmed] = useState(false);
+  const [quickSubmitting, setQuickSubmitting] = useState(false);
 
   const refreshStatus = async () => {
     if (!isAuthenticated) { setStatus(null); return; }
@@ -29,13 +38,31 @@ export const AiFriendSection: React.FC = () => {
 
   const openAccess = () => {
     if (!isAuthenticated) {
-      setRegisterStep(1);
-      setAuthMode('register');
-      setIsRegisterModalOpen(true);
+      setQuickRegisterOpen(true);
       return;
     }
     setActiveTab('verification');
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const submitQuickRegistration = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError('');
+    if (quickPassword.length < 8) { setError('Password must be at least 8 characters.'); return; }
+    if (quickPassword !== quickConfirmPassword) { setError('Passwords do not match.'); return; }
+    if (!quickAdultConfirmed) { setError('Please confirm that you are 18 years or older.'); return; }
+    setQuickSubmitting(true);
+    try {
+      await authService.registerAiFriend({
+        full_name: quickName.trim(), email: quickEmail.trim(), password: quickPassword,
+        phone: quickPhone.trim() || undefined,
+      });
+      // AppContext initializes the newly issued session and the user continues with OTP verification.
+      window.location.reload();
+    } catch (err: any) {
+      setError(err?.response?.data?.error?.message || 'Unable to create your AI Friend account. Please try again.');
+      setQuickSubmitting(false);
+    }
   };
 
   const confirmAge = async () => {
@@ -169,6 +196,33 @@ export const AiFriendSection: React.FC = () => {
           <p className="mt-3 text-center text-[10px] leading-5 text-slate-500">AI-generated responses may be imperfect. AI Friend is not a human, therapist or emergency service.</p>
         </div>
       </div>
+
+      {quickRegisterOpen && !isAuthenticated && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-slate-950/85 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="ai-friend-register-title">
+          <div className="my-8 w-full max-w-md rounded-3xl border border-white/10 bg-slate-900 p-6 shadow-2xl shadow-blue-950/40">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <span className="inline-flex items-center gap-2 rounded-full border border-blue-300/20 bg-blue-400/10 px-3 py-1 text-[10px] font-bold tracking-[0.16em] text-blue-200"><Bot className="h-3.5 w-3.5" /> YORBUDDY AI FRIEND</span>
+                <h3 id="ai-friend-register-title" className="mt-3 text-2xl font-black text-white">Create your account</h3>
+                <p className="mt-1 text-sm leading-6 text-slate-400">A quick, separate signup for AI Friend. No Buddy profile or KYC required.</p>
+              </div>
+              <button type="button" onClick={() => setQuickRegisterOpen(false)} className="rounded-xl border border-white/10 px-3 py-2 text-slate-300 transition hover:bg-white/10" aria-label="Close registration">✕</button>
+            </div>
+            <form onSubmit={submitQuickRegistration} className="space-y-3">
+              <label className="block space-y-1.5"><span className="text-xs font-semibold text-slate-300">Full name</span><input required maxLength={100} autoComplete="name" value={quickName} onChange={event => setQuickName(event.target.value)} placeholder="Enter your name" className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-blue-400" /></label>
+              <label className="block space-y-1.5"><span className="text-xs font-semibold text-slate-300">Email address</span><input required type="email" maxLength={255} autoComplete="email" value={quickEmail} onChange={event => setQuickEmail(event.target.value)} placeholder="you@example.com" className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-blue-400" /></label>
+              <label className="block space-y-1.5"><span className="text-xs font-semibold text-slate-300">Mobile number <span className="font-normal text-slate-500">(optional)</span></span><input type="tel" maxLength={30} autoComplete="tel" value={quickPhone} onChange={event => setQuickPhone(event.target.value)} placeholder="+91 98765 43210" className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-blue-400" /></label>
+              <label className="block space-y-1.5"><span className="text-xs font-semibold text-slate-300">Password</span><input required type="password" minLength={8} maxLength={128} autoComplete="new-password" value={quickPassword} onChange={event => setQuickPassword(event.target.value)} placeholder="At least 8 characters" className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-blue-400" /></label>
+              <label className="block space-y-1.5"><span className="text-xs font-semibold text-slate-300">Confirm password</span><input required type="password" minLength={8} maxLength={128} autoComplete="new-password" value={quickConfirmPassword} onChange={event => setQuickConfirmPassword(event.target.value)} placeholder="Re-enter password" className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-blue-400" /></label>
+              <label className="flex items-start gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs leading-5 text-slate-300"><input type="checkbox" required checked={quickAdultConfirmed} onChange={event => setQuickAdultConfirmed(event.target.checked)} className="mt-1 accent-blue-500" /><span>I confirm that I am 18 years or older. I understand AI Friend is an AI companion and is strictly platonic.</span></label>
+              <div className="rounded-xl bg-blue-400/5 p-3 text-xs leading-5 text-slate-400"><span className="font-semibold text-blue-200">Next step:</span> Verify either your email or mobile number with OTP. KYC is not required. Chat opens after verification, age confirmation and access activation.</div>
+              {error && <p role="alert" className="rounded-lg border border-rose-400/20 bg-rose-500/10 p-3 text-xs text-rose-200">{error}</p>}
+              <button type="submit" disabled={quickSubmitting} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-pink-500 px-4 py-3.5 text-sm font-bold text-white shadow-lg shadow-blue-950/30 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50">{quickSubmitting ? 'Creating account…' : 'Create AI Friend account'} <ArrowRight className="h-4 w-4" /></button>
+              <p className="text-center text-[11px] text-slate-500">Already registered? Close this window and sign in.</p>
+            </form>
+          </div>
+        </div>
+      )}
     </section>
   );
 };
