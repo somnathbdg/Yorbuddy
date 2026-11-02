@@ -169,6 +169,68 @@ export async function register(req: Request, res: Response, next: NextFunction):
   }
 }
 
+/**
+ * AI Friend-only quick registration.
+ * Creates a normal user account without collecting Buddy profile/KYC fields.
+ * Email and phone remain unverified until the existing OTP endpoints succeed.
+ */
+export async function registerAiFriend(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const schema = z.object({
+      email: z.string().trim().email('Invalid email address').max(255),
+      password: z.string().min(8, 'Password must be at least 8 characters').max(128),
+      full_name: z.string().trim().min(1, 'Full name is required').max(100),
+      phone: z.string().trim().max(30).optional().or(z.literal('')),
+    }).strict();
+    const input = schema.parse(req.body);
+    const email = input.email.toLowerCase();
+    const normalizedPhone = input.phone ? normalizeIndianPhone(input.phone) : null;
+
+    if (await findUserByEmail(email)) {
+      throw Conflict('An account with this email already exists. Please log in.');
+    }
+
+    const supabase = getSupabase();
+    if (normalizedPhone) {
+      const { data: existingPhone, error: phoneLookupError } = await supabase
+        .from('users').select('id').eq('phone', normalizedPhone).limit(1);
+      if (phoneLookupError) throw phoneLookupError;
+      if (existingPhone && existingPhone.length > 0) {
+        throw Conflict('This mobile number is already registered. Please log in or use a different number.');
+      }
+    }
+
+    const { data: newUser, error } = await supabase.from('users').insert({
+      email,
+      password_hash: hashPassword(input.password),
+      full_name: input.full_name,
+      phone: normalizedPhone,
+      role: 'user',
+    }).select().single();
+
+    if (error) {
+      if (error.code === '23505') throw Conflict('This email or mobile number is already registered.');
+      throw error;
+    }
+
+    const accessToken = generateAccessToken({ userId: newUser.id, email: newUser.email, role: newUser.role });
+    const { token: refreshToken, tokenId } = generateRefreshToken(newUser.id);
+    const refreshExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    await storeRefreshToken(newUser.id, tokenId, refreshExpires, req);
+
+    // Keep the existing account-level free-access grant invariant. AI Friend
+    // entitlement deliberately excludes FREE_ACCESS_10D in its own service.
+    await assignFreeAccess(supabase, newUser.id);
+
+    res.status(201).json({
+      data: { user: sanitizeUser(newUser), accessToken, refreshToken },
+      message: 'AI Friend account created. Verify your email or mobile to continue.',
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function login(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const input = loginSchema.parse(req.body);
