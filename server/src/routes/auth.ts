@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { register, login, refresh, logout, getCurrentUser } from '../services/authService.js';
+import { register, registerAiFriend, login, refresh, logout, getCurrentUser } from '../services/authService.js';
 import { forgotPassword, resetPassword } from '../services/passwordResetService.js';
 import { authenticate } from '../middleware/auth.js';
 import { authLimiter } from '../middleware/security.js';
@@ -10,7 +10,7 @@ const router = Router();
  * POST /api/auth/register
  * Register a new user account.
  */
-router.post('/register', authLimiter, register);
+router.post('/register', authLimiter, register);\n\n/** Dedicated lightweight registration for AI Friend; does not create a Buddy profile. */\nrouter.post('/ai-friend/register', authLimiter, registerAiFriend);
 
 /**
  * POST /api/auth/login
