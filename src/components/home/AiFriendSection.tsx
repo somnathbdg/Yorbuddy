@@ -6,7 +6,7 @@ import { aiFriendService, AiFriendMessage, AiFriendSubscriptionStatus } from '..
 import { authService } from '../../services/auth';
 
 export const AiFriendSection: React.FC = () => {
-  const { isAuthenticated, setIsRegisterModalOpen, setRegisterStep, setAuthMode, setActiveTab } = useApp();
+  const { isAuthenticated, setActiveTab } = useApp();
   const [confirmingAge, setConfirmingAge] = useState(false);
   const [status, setStatus] = useState<AiFriendSubscriptionStatus | null>(null);
   const [loading, setLoading] = useState(false);
