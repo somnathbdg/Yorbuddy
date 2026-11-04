@@ -181,6 +181,7 @@ export async function registerAiFriend(req: Request, res: Response, next: NextFu
       password: z.string().min(8, 'Password must be at least 8 characters').max(128),
       full_name: z.string().trim().min(1, 'Full name is required').max(100),
       phone: z.string().trim().max(30).optional().or(z.literal('')),
+      adult_confirmed: z.literal(true),
     }).strict();
     const input = schema.parse(req.body);
     const email = input.email.toLowerCase();
@@ -206,6 +207,7 @@ export async function registerAiFriend(req: Request, res: Response, next: NextFu
       full_name: input.full_name,
       phone: normalizedPhone,
       role: 'user',
+      ai_friend_adult_confirmed_at: new Date().toISOString(),
     }).select().single();
 
     if (error) {
@@ -213,20 +215,31 @@ export async function registerAiFriend(req: Request, res: Response, next: NextFu
       throw error;
     }
 
-    const accessToken = generateAccessToken({ userId: newUser.id, email: newUser.email, role: newUser.role });
-    const { token: refreshToken, tokenId } = generateRefreshToken(newUser.id);
-    const refreshExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-    await storeRefreshToken(newUser.id, tokenId, refreshExpires, req);
-
-    // Keep the existing account-level free-access grant invariant. AI Friend
-    // entitlement deliberately excludes FREE_ACCESS_10D in its own service.
-    await assignFreeAccess(supabase, newUser.id);
-
-    res.status(201).json({
-      data: { user: sanitizeUser(newUser), accessToken, refreshToken },
-      message: 'AI Friend account created. Verify your email or mobile to continue.',
-    });
-  } catch (err) {
+    let tokenId: string | null = null;
+    try {
+      const accessToken = generateAccessToken({ userId: newUser.id, email: newUser.email, role: newUser.role });
+      const tokens = generateRefreshToken(newUser.id);
+      tokenId = tokens.tokenId;
+      const refreshExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      await storeRefreshToken(newUser.id, tokenId, refreshExpires, req);
+      await assignFreeAccess(supabase, newUser.id);
+      res.status(201).json({
+        data: { user: sanitizeUser(newUser), accessToken, refreshToken: tokens.token },
+        message: 'AI Friend account created. Verify your email or mobile to continue.',
+      });
+    } catch (creationError) {
+      const cleanupErrors: string[] = [];
+      if (tokenId) {
+        const tokenCleanup = await supabase.from('refresh_tokens').delete().eq('user_id', newUser.id).eq('token_hash', tokenId);
+        if (tokenCleanup.error) cleanupErrors.push('refresh token: ' + tokenCleanup.error.message);
+      }
+      const membershipCleanup = await supabase.from('memberships').delete().eq('user_id', newUser.id).eq('plan_id', 'FREE_ACCESS_10D');
+      if (membershipCleanup.error) cleanupErrors.push('free access: ' + membershipCleanup.error.message);
+      const userCleanup = await supabase.from('users').delete().eq('id', newUser.id);
+      if (userCleanup.error) cleanupErrors.push('user: ' + userCleanup.error.message);
+      if (cleanupErrors.length) console.error('[AI_FRIEND_REGISTER] Compensating cleanup incomplete:', cleanupErrors.join('; '));
+      throw creationError;
+    }  } catch (err) {
     next(err);
   }
 }
