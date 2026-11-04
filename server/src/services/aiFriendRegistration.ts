@@ -53,3 +53,21 @@ export async function compensateAiFriendRegistration(input: {
     );
   }
 }
+
+export async function finalizeAiFriendRegistration<T>(input: {
+  userId: string;
+  createSession: () => Promise<{ result: T; tokenId: string }>;
+  assignFreeAccess: () => Promise<void>;
+  cleanup: (tokenId: string | null) => Promise<void>;
+}): Promise<T> {
+  let tokenId: string | null = null;
+  try {
+    const session = await input.createSession();
+    tokenId = session.tokenId;
+    await input.assignFreeAccess();
+    return session.result;
+  } catch (error) {
+    await input.cleanup(tokenId);
+    throw error;
+  }
+}
