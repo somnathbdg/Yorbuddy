@@ -10,7 +10,10 @@ const router = Router();
  * POST /api/auth/register
  * Register a new user account.
  */
-router.post('/register', authLimiter, register);\n\n/** Dedicated lightweight registration for AI Friend; does not create a Buddy profile. */\nrouter.post('/ai-friend/register', authLimiter, registerAiFriend);
+router.post('/register', authLimiter, register);
+
+/** Dedicated lightweight registration for AI Friend; does not create a Buddy profile. */
+router.post('/ai-friend/register', authLimiter, registerAiFriend);
 
 /**
  * POST /api/auth/login
