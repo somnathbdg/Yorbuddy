@@ -209,9 +209,10 @@ export async function registerAiFriend(req: Request, res: Response, next: NextFu
 
     const registrationResult = await finalizeAiFriendRegistration({
       userId: newUser.id,
-      createSession: async () => {
+      createSession: async (setTokenId) => {
         const accessToken = generateAccessToken({ userId: newUser.id, email: newUser.email, role: newUser.role });
         const tokens = generateRefreshToken(newUser.id);
+        setTokenId(tokens.tokenId);
         const refreshExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
         await storeRefreshToken(newUser.id, tokens.tokenId, refreshExpires, req);
         return {
@@ -223,9 +224,9 @@ export async function registerAiFriend(req: Request, res: Response, next: NextFu
       cleanup: (tokenId) => compensateAiFriendRegistration({
         userId: newUser.id,
         tokenId,
-        deleteRefreshToken: () => supabase.from('refresh_tokens').delete().eq('user_id', newUser.id).eq('token_hash', tokenId),
-        deleteFreeAccess: () => supabase.from('memberships').delete().eq('user_id', newUser.id).eq('plan_id', 'FREE_ACCESS_10D'),
-        deleteUser: () => supabase.from('users').delete().eq('id', newUser.id),
+        deleteRefreshToken: async () => await supabase.from('refresh_tokens').delete().eq('user_id', newUser.id).eq('token_hash', tokenId),
+        deleteFreeAccess: async () => await supabase.from('memberships').delete().eq('user_id', newUser.id).eq('plan_id', 'FREE_ACCESS_10D'),
+        deleteUser: async () => await supabase.from('users').delete().eq('id', newUser.id),
       }),
     });
 
