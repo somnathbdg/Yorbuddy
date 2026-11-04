@@ -6,7 +6,7 @@ import { Conflict, Unauthorized, BadRequest } from '../middleware/errorHandler.j
 import { assignFreeAccess } from './membershipService.js';
 import { normalizeIndianPhone } from '../utils/phone.js';
 import { z } from 'zod';
-import { aiFriendRegistrationSchema, buildAiFriendUserInsert, compensateAiFriendRegistration } from './aiFriendRegistration.js';
+import { aiFriendRegistrationSchema, buildAiFriendUserInsert, compensateAiFriendRegistration, finalizeAiFriendRegistration } from './aiFriendRegistration.js';
 
 // ========== Input Validation Schemas ==========
 
@@ -207,28 +207,32 @@ export async function registerAiFriend(req: Request, res: Response, next: NextFu
       throw error;
     }
 
-    let tokenId: string | null = null;
-    try {
-      const accessToken = generateAccessToken({ userId: newUser.id, email: newUser.email, role: newUser.role });
-      const tokens = generateRefreshToken(newUser.id);
-      tokenId = tokens.tokenId;
-      const refreshExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-      await storeRefreshToken(newUser.id, tokenId, refreshExpires, req);
-      await assignFreeAccess(supabase, newUser.id);
-      res.status(201).json({
-        data: { user: sanitizeUser(newUser), accessToken, refreshToken: tokens.token },
-        message: 'AI Friend account created. Verify your email or mobile to continue.',
-      });
-    } catch (creationError) {
-      await compensateAiFriendRegistration({
+    const registrationResult = await finalizeAiFriendRegistration({
+      userId: newUser.id,
+      createSession: async () => {
+        const accessToken = generateAccessToken({ userId: newUser.id, email: newUser.email, role: newUser.role });
+        const tokens = generateRefreshToken(newUser.id);
+        const refreshExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+        await storeRefreshToken(newUser.id, tokens.tokenId, refreshExpires, req);
+        return {
+          tokenId: tokens.tokenId,
+          result: { user: sanitizeUser(newUser), accessToken, refreshToken: tokens.token },
+        };
+      },
+      assignFreeAccess: () => assignFreeAccess(supabase, newUser.id),
+      cleanup: (tokenId) => compensateAiFriendRegistration({
         userId: newUser.id,
         tokenId,
         deleteRefreshToken: () => supabase.from('refresh_tokens').delete().eq('user_id', newUser.id).eq('token_hash', tokenId),
         deleteFreeAccess: () => supabase.from('memberships').delete().eq('user_id', newUser.id).eq('plan_id', 'FREE_ACCESS_10D'),
         deleteUser: () => supabase.from('users').delete().eq('id', newUser.id),
-      });
-      throw creationError;
-    }
+      }),
+    });
+
+    res.status(201).json({
+      data: registrationResult,
+      message: 'AI Friend account created. Verify your email or mobile to continue.',
+    });
   } catch (err) {
     next(err);
   }
