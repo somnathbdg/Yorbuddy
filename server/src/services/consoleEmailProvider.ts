@@ -33,9 +33,11 @@ export class ConsoleEmailProvider implements EmailService {
     };
   }
 
-  async sendVerificationEmail(to: string, code: string, type: 'email' | 'phone'): Promise<EmailResult> {
-    const template = verificationEmail(code, type);
-    return this.logEmail(template, to);
+  async sendVerificationEmail(_to: string, _code: string, _type: 'email' | 'phone'): Promise<EmailResult> {
+    // Console mode never delivers email. Do not let verification endpoints
+    // report success when a real mailbox has not received a code.
+    console.warn('[EMAIL:console] Verification email was not sent. Configure EMAIL_PROVIDER=sendgrid for real delivery.');
+    return { success: false, error: 'Email delivery is not configured.' };
   }
 
   async sendPasswordResetEmail(to: string, resetToken: string): Promise<EmailResult> {
