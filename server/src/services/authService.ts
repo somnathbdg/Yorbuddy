@@ -6,6 +6,7 @@ import { Conflict, Unauthorized, BadRequest } from '../middleware/errorHandler.j
 import { assignFreeAccess } from './membershipService.js';
 import { normalizeIndianPhone } from '../utils/phone.js';
 import { z } from 'zod';
+import { aiFriendRegistrationSchema, buildAiFriendUserInsert, compensateAiFriendRegistration } from './aiFriendRegistration.js';
 
 // ========== Input Validation Schemas ==========
 
@@ -176,14 +177,7 @@ export async function register(req: Request, res: Response, next: NextFunction):
  */
 export async function registerAiFriend(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const schema = z.object({
-      email: z.string().trim().email('Invalid email address').max(255),
-      password: z.string().min(8, 'Password must be at least 8 characters').max(128),
-      full_name: z.string().trim().min(1, 'Full name is required').max(100),
-      phone: z.string().trim().max(30).optional().or(z.literal('')),
-      adult_confirmed: z.literal(true),
-    }).strict();
-    const input = schema.parse(req.body);
+    const input = aiFriendRegistrationSchema.parse(req.body);
     const email = input.email.toLowerCase();
     const normalizedPhone = input.phone ? normalizeIndianPhone(input.phone) : null;
 
@@ -201,14 +195,12 @@ export async function registerAiFriend(req: Request, res: Response, next: NextFu
       }
     }
 
-    const { data: newUser, error } = await supabase.from('users').insert({
+    const { data: newUser, error } = await supabase.from('users').insert(buildAiFriendUserInsert({
       email,
       password_hash: hashPassword(input.password),
       full_name: input.full_name,
       phone: normalizedPhone,
-      role: 'user',
-      ai_friend_adult_confirmed_at: new Date().toISOString(),
-    }).select().single();
+    })).select().single();
 
     if (error) {
       if (error.code === '23505') throw Conflict('This email or mobile number is already registered.');
@@ -228,16 +220,13 @@ export async function registerAiFriend(req: Request, res: Response, next: NextFu
         message: 'AI Friend account created. Verify your email or mobile to continue.',
       });
     } catch (creationError) {
-      const cleanupErrors: string[] = [];
-      if (tokenId) {
-        const tokenCleanup = await supabase.from('refresh_tokens').delete().eq('user_id', newUser.id).eq('token_hash', tokenId);
-        if (tokenCleanup.error) cleanupErrors.push('refresh token: ' + tokenCleanup.error.message);
-      }
-      const membershipCleanup = await supabase.from('memberships').delete().eq('user_id', newUser.id).eq('plan_id', 'FREE_ACCESS_10D');
-      if (membershipCleanup.error) cleanupErrors.push('free access: ' + membershipCleanup.error.message);
-      const userCleanup = await supabase.from('users').delete().eq('id', newUser.id);
-      if (userCleanup.error) cleanupErrors.push('user: ' + userCleanup.error.message);
-      if (cleanupErrors.length) console.error('[AI_FRIEND_REGISTER] Compensating cleanup incomplete:', cleanupErrors.join('; '));
+      await compensateAiFriendRegistration({
+        userId: newUser.id,
+        tokenId,
+        deleteRefreshToken: () => supabase.from('refresh_tokens').delete().eq('user_id', newUser.id).eq('token_hash', tokenId),
+        deleteFreeAccess: () => supabase.from('memberships').delete().eq('user_id', newUser.id).eq('plan_id', 'FREE_ACCESS_10D'),
+        deleteUser: () => supabase.from('users').delete().eq('id', newUser.id),
+      });
       throw creationError;
     }
   } catch (err) {
