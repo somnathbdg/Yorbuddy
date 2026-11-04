@@ -203,8 +203,8 @@ export const PhoneVerificationPanel: React.FC<PhoneVerificationProps> = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    userService.getCurrentUser()
-      .then((user: any) => setPhone(user?.phone || null))
+    userService.getProfile()
+      .then((profile: any) => setPhone(profile?.user?.phone || null))
       .catch(() => setPhone(null))
       .finally(() => setIsLoading(false));
   }, []);
