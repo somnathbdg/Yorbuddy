@@ -1,0 +1,62 @@
+name: AI Friend Quick Registration Validation
+
+on:
+  push:
+    branches:
+      - feature/ai-friend-quick-registration
+  pull_request:
+    branches:
+      - feature/ai-friend-quick-registration
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ai-friend-quick-registration-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend lint and production build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install frontend dependencies
+        run: npm ci
+      - name: TypeScript lint
+        run: npm run lint
+      - name: Production build
+        run: npm run build
+
+  backend:
+    name: Backend typecheck, build and tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - name: Install backend dependencies
+        run: npm ci
+      - name: TypeScript typecheck
+        run: npm run typecheck
+      - name: Production build
+        run: npm run build
+      - name: Existing AI Friend tests
+        run: npm run test:ai-friend
+      - name: AI Friend registration failure-path tests
+        run: npm run test:ai-friend-registration
