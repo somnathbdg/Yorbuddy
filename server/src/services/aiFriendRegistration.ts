@@ -56,13 +56,13 @@ export async function compensateAiFriendRegistration(input: {
 
 export async function finalizeAiFriendRegistration<T>(input: {
   userId: string;
-  createSession: () => Promise<{ result: T; tokenId: string }>;
+  createSession: (setTokenId: (tokenId: string) => void) => Promise<{ result: T; tokenId: string }>;
   assignFreeAccess: () => Promise<void>;
   cleanup: (tokenId: string | null) => Promise<void>;
 }): Promise<T> {
   let tokenId: string | null = null;
   try {
-    const session = await input.createSession();
+    const session = await input.createSession((createdTokenId) => { tokenId = createdTokenId; });
     tokenId = session.tokenId;
     await input.assignFreeAccess();
     return session.result;
