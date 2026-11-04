@@ -8,7 +8,7 @@
  */
 
 import { EmailService, EmailResult, BookingEmailData, MembershipEmailData, KycEmailData, BuddyApplicationEmailData, SecurityNotificationData } from './emailService.js';
-import { verificationEmail, passwordResetEmail, bookingConfirmationEmail, bookingCancellationEmail, membershipConfirmationEmail, kycStatusEmail, buddyApplicationEmail, securityNotificationEmail, EmailTemplate } from './emailTemplates.js';
+import { passwordResetEmail, bookingConfirmationEmail, bookingCancellationEmail, membershipConfirmationEmail, kycStatusEmail, buddyApplicationEmail, securityNotificationEmail, EmailTemplate } from './emailTemplates.js';
 import { env } from '../config/env.js';
 
 export class ConsoleEmailProvider implements EmailService {
