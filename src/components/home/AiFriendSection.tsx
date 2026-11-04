@@ -55,7 +55,7 @@ export const AiFriendSection: React.FC = () => {
     try {
       await authService.registerAiFriend({
         full_name: quickName.trim(), email: quickEmail.trim(), password: quickPassword,
-        phone: quickPhone.trim() || undefined,
+        phone: quickPhone.trim() || undefined, adult_confirmed: true,
       });
       // AppContext initializes the newly issued session and the user continues with OTP verification.
       window.location.reload();
