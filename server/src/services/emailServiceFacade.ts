@@ -54,10 +54,9 @@ class EmailServiceFacade implements EmailService {
   }
 
   async sendVerificationEmail(to: string, code: string, type: 'email' | 'phone'): Promise<EmailResult> {
-    const key = `verification:${type}:${to}:${code.slice(0, 3)}`;
-    this.enqueue(key, () => this.provider.sendVerificationEmail(to, code, type));
-    // Return immediately — actual delivery is async
-    return { success: true, messageId: key };
+    // Verification codes are time-sensitive: await provider acceptance before
+    // the API reports that a code was sent.
+    return this.provider.sendVerificationEmail(to, code, type);
   }
 
   async sendPasswordResetEmail(to: string, resetToken: string): Promise<EmailResult> {
