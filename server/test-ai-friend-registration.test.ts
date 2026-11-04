@@ -45,10 +45,10 @@ test('refresh-token insert failure triggers compensating cleanup and preserves o
   await assert.rejects(
     finalizeAiFriendRegistration({
       userId: 'user-1',
-      createSession: async () => { throw originalError; },
+      createSession: async (setTokenId) => { setTokenId('token-1'); throw originalError; },
       assignFreeAccess: async () => { calls.push('assign-free-access'); },
       cleanup: async (tokenId) => {
-        assert.equal(tokenId, null);
+        assert.equal(tokenId, 'token-1');
         calls.push('delete-refresh-token');
         calls.push('delete-free-access');
         calls.push('delete-user');
@@ -67,7 +67,7 @@ test('free-access assignment failure triggers cleanup including inserted refresh
   await assert.rejects(
     finalizeAiFriendRegistration({
       userId: 'user-2',
-      createSession: async () => ({ tokenId: 'token-2', result: 'session' }),
+      createSession: async (setTokenId) => { setTokenId('token-2'); return { tokenId: 'token-2', result: 'session' }; },
       assignFreeAccess: async () => { throw originalError; },
       cleanup: async (tokenId) => {
         assert.equal(tokenId, 'token-2');
