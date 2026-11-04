@@ -40,7 +40,7 @@ class AuthService {
     return data;
   }
 
-  async registerAiFriend(payload: { email: string; password: string; full_name: string; phone?: string }): Promise<AuthResponse> {
+  async registerAiFriend(payload: { email: string; password: string; full_name: string; phone?: string; adult_confirmed: true }): Promise<AuthResponse> {
     const response = await apiClient.post('/auth/ai-friend/register', payload);
     const data = response.data.data;
     this.setTokens(data.accessToken, data.refreshToken);
