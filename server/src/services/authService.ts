@@ -239,7 +239,8 @@ export async function registerAiFriend(req: Request, res: Response, next: NextFu
       if (userCleanup.error) cleanupErrors.push('user: ' + userCleanup.error.message);
       if (cleanupErrors.length) console.error('[AI_FRIEND_REGISTER] Compensating cleanup incomplete:', cleanupErrors.join('; '));
       throw creationError;
-    }  } catch (err) {
+    }
+  } catch (err) {
     next(err);
   }
 }
