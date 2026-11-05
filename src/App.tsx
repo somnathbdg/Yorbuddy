@@ -95,13 +95,13 @@ const AppContent: React.FC = () => {
             {activeTab === 'home' && (
               <>
                 <Hero />
+                <AiFriendSection />
                 <ActivityCategoryStrip />
                 <FindABuddySection />
                 <HowItWorks />
                 <TrustSafety />
                 <WhyYorBuddy />
                 <FaqSection />
-                <AiFriendSection />
                 <FinalCTA />
               </>
             )}
