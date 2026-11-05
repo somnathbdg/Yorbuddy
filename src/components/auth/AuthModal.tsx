@@ -60,6 +60,7 @@ export const AuthModal: React.FC = () => {
   const [dob, setDob] = useState('');
   const [gender, setGender] = useState<'male' | 'female' | 'non-binary' | 'prefer-not-to-say'>('male');
   const [city, setCity] = useState('');
+  const [adultConfirmed, setAdultConfirmed] = useState(false);
 
   // Forgot password state
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
@@ -192,38 +193,26 @@ export const AuthModal: React.FC = () => {
     e.preventDefault();
     setErrorText('');
 
-    if (!validateAge(dob)) {
-      setErrorText('You must be 18 years or older to join YorBuddy.');
+    if (!adultConfirmed) {
+      setErrorText('Please confirm that you are 18 years or older.');
       return;
     }
-
-    if (!mobile.trim() || mobile.trim().length < 10) {
-      setErrorText('Please enter a valid mobile number.');
-      return;
-    }
-
     if (password.length < 8) {
       setErrorText('Password must be at least 8 characters.');
       return;
     }
-
     if (password !== confirmPassword) {
       setErrorText('Passwords do not match.');
       return;
     }
 
-    setErrorText('');
     setIsLoading(true);
-
     try {
-      const result = await authService.register({
+      const result = await authService.registerAiFriend({
         email,
         password,
         full_name: fullName,
-        phone: mobile || undefined,
-        dob,
-        gender,
-        city,
+        adult_confirmed: true,
       });
 
       const newUser = {
@@ -236,17 +225,27 @@ export const AuthModal: React.FC = () => {
         is_membership_paid: result.user.is_membership_paid,
         created_at: result.user.created_at,
         updated_at: new Date().toISOString(),
-        dob,
-        gender,
+        dob: '',
+        gender: 'prefer-not-to-say' as const,
       };
 
       setCurrentUser(newUser);
       setIsAuthenticated(true);
 
-      setRegisterStep(2);
+      // Preserve an explicitly selected paid plan; otherwise use the
+      // free access assigned by the registration endpoint.
+      if (pendingMembershipPlan && pendingMembershipPlan !== 'FREE_ACCESS_10D') {
+        setRegisterStep(4);
+        return;
+      }
+
+      await fetchApiMembership();
+      setIsRegisterModalOpen(false);
+      setActiveRole('user');
+      setActiveTab('user-dashboard');
     } catch (err: any) {
       const apiError = err.response?.data?.error;
-      setErrorText(apiError?.message || 'Step 3 failed. Please try again.');
+      setErrorText(apiError?.message || 'Could not create your account. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -407,7 +406,7 @@ export const AuthModal: React.FC = () => {
     );
   };
 
-  const totalSteps = 4;
+  const totalSteps = 1;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200">
@@ -791,197 +790,131 @@ export const AuthModal: React.FC = () => {
           ) : (
             /* MULTI-STEP REGISTRATION FORM */
             <div>
-              {/* STEP 1: Account Basics */}
+              {/* SIMPLE REGISTRATION: account first, profile details later */}
               {registerStep === 1 && (
                 <form onSubmit={handleStep1Submit} className="space-y-4">
                   <div>
-                    <label className="block text-sm font-bold text-slate-700 uppercase tracking-wider mb-1">
-                      Full Name (As per Govt ID)
-                    </label>
+                    <label className="block text-sm font-bold text-slate-700 mb-1.5">Full Name</label>
                     <div className="relative">
                       <UserIcon className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                       <input
                         type="text"
                         value={fullName}
                         onChange={(e) => setFullName(e.target.value)}
-                        placeholder="e.g. Somnath Banerjee"
-                        className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm font-medium text-slate-800"
+                        placeholder="Enter your full name"
+                        className="w-full pl-9 pr-3 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm"
+                        autoComplete="name"
+                        required
+                        maxLength={100}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1.5">Email Address</label>
+                    <div className="relative">
+                      <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="you@example.com"
+                        className="w-full pl-9 pr-3 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm"
+                        autoComplete="email"
                         required
                       />
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-sm font-bold text-slate-700 uppercase tracking-wider mb-1">
-                        Email Address
-                      </label>
-                      <div className="relative">
-                        <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                        <input
-                          type="email"
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                          placeholder="you@example.com"
-                          className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm font-medium text-slate-800"
-                          required
-                          autoComplete="email"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-bold text-slate-700 uppercase tracking-wider mb-1">
-                        Mobile Number
-                      </label>
-                      <div className="relative">
-                        <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                        <input
-                        type="tel"
-                        value={mobile}
-                        onChange={(e) => setMobile(e.target.value)}
-                        placeholder="+91 98765 43210"
-                        className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm font-medium text-slate-800"
-                        required
-                        />
-                      </div>
-                    </div>
-                  </div>
-
                   <div>
-                    <label className="block text-sm font-bold text-slate-700 uppercase tracking-wider mb-1">
-                      Password (min 8 characters)
-                    </label>
+                    <label className="block text-sm font-bold text-slate-700 mb-1.5">Password</label>
                     <div className="relative">
                       <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                       <input
                         type="password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm font-medium text-slate-800"
-                        required
-                        minLength={8}
+                        placeholder="At least 8 characters"
+                        className="w-full pl-9 pr-3 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm"
                         autoComplete="new-password"
+                        minLength={8}
+                        maxLength={128}
+                        required
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-bold text-slate-700 uppercase tracking-wider mb-1">
-                      Confirm Password
-                    </label>
+                    <label className="block text-sm font-bold text-slate-700 mb-1.5">Confirm Password</label>
                     <div className="relative">
                       <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                       <input
                         type="password"
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
-                        className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm font-medium text-slate-800"
-                        required
-                        minLength={8}
+                        placeholder="Enter password again"
+                        className="w-full pl-9 pr-3 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm"
                         autoComplete="new-password"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div>
-                      <label className="block text-sm font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center justify-between">
-                        <span>Date of Birth</span>
-                        <span className="text-[10px] text-pink-600 font-bold">18+ Only</span>
-                      </label>
-                      <input
-                        type="date"
-                        value={dob}
-                        onChange={(e) => setDob(e.target.value)}
-                        className="w-full p-2 rounded-xl bg-slate-50 border border-slate-200 text-sm font-medium text-slate-800"
+                        minLength={8}
+                        maxLength={128}
                         required
                       />
                     </div>
-
-                    <div>
-                      <label className="block text-sm font-bold text-slate-700 uppercase tracking-wider mb-1">
-                        Gender
-                      </label>
-                      <select
-                        value={gender}
-                        onChange={(e) => setGender(e.target.value as any)}
-                        className="w-full p-2 rounded-xl bg-slate-50 border border-slate-200 text-sm font-medium text-slate-800"
-                      >
-                        <option value="male">Male</option>
-                        <option value="female">Female</option>
-                        <option value="non-binary">Non-binary</option>
-                        <option value="prefer-not-to-say">Prefer not to say</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-bold text-slate-700 uppercase tracking-wider mb-1">
-                        City
-                      </label>
-                      <input
-                        type="text"
-                        value={city}
-                        onChange={(e) => setCity(e.target.value)}
-                        placeholder="e.g. Pune"
-                        className="w-full p-2 rounded-xl bg-slate-50 border border-slate-200 text-sm font-medium text-slate-800"
-                      />
-                    </div>
                   </div>
+
+                  <label className="flex items-start gap-2 text-xs text-slate-600">
+                    <input
+                      type="checkbox"
+                      checked={adultConfirmed}
+                      onChange={(e) => setAdultConfirmed(e.target.checked)}
+                      className="mt-0.5 rounded border-slate-300 text-blue-600"
+                      required
+                    />
+                    <span>I confirm that I am 18 years or older and agree to YorBuddy's Terms and Privacy Policy.</span>
+                  </label>
 
                   {errorText && (
-                    <p className="text-sm font-bold text-rose-600 bg-rose-50 p-2 rounded-lg border border-rose-200">
+                    <p className="text-sm font-bold text-rose-600 bg-rose-50 p-3 rounded-lg border border-rose-200">
                       {errorText}
                     </p>
                   )}
 
-                  <div className="pt-2">
-                    <button
-                      type="submit"
-                      disabled={isLoading}
-                      className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-600 to-pink-500 text-white font-bold text-sm shadow-md shadow-blue-500/20 hover:opacity-95 transition-opacity flex items-center justify-center space-x-1 disabled:opacity-50"
-                    >
-                      {isLoading ? (
-                        <>
-                          <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                          <span>Creating account...</span>
-                        </>
-                      ) : (
-                        <>
-                          <span>Create Account & Continue</span>
-                          <ArrowRight className="w-4 h-4" />
-                        </>
-                      )}
-                    </button>
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-600 to-pink-500 text-white font-bold text-sm shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {isLoading ? (
+                      <>
+                        <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                        <span>Creating account...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Create Account</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+
+                  <div className="relative my-3">
+                    <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-200"></div></div>
+                    <div className="relative flex justify-center text-xs"><span className="bg-white px-3 text-slate-400">or sign up with</span></div>
                   </div>
 
-                  {/* Divider */}
-                  <div className="relative my-4">
-                    <div className="absolute inset-0 flex items-center">
-                      <div className="w-full border-t border-slate-200"></div>
-                    </div>
-                    <div className="relative flex justify-center text-xs">
-                      <span className="bg-white px-3 text-slate-400 font-medium">or sign up with</span>
-                    </div>
-                  </div>
-
-                  {/* Google Sign Up Button */}
                   <button
                     type="button"
                     onClick={handleGoogleSignIn}
-                    className="w-full py-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold text-sm flex items-center justify-center space-x-2 transition-colors"
+                    className="w-full py-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold text-sm flex items-center justify-center gap-2"
                   >
                     <Chrome className="w-5 h-5 text-blue-500" />
                     <span>Sign up with Google</span>
                   </button>
 
-                  <div className="text-center pt-2">
+                  <div className="text-center pt-1">
                     <button
                       type="button"
-                      onClick={() => {
-                        setAuthMode('login');
-                        setErrorText('');
-                      }}
+                      onClick={() => { setAuthMode('login'); setErrorText(''); }}
                       className="text-xs text-slate-500 hover:text-blue-600"
                     >
                       Already have an account? <strong>Login</strong>
