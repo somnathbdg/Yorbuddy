@@ -117,14 +117,14 @@ export async function getAiFriendChatHistory(
     .select('id, role, content, created_at')
     .eq('user_id', userId)
     .eq('personality', personality)
-    .order('created_at', { ascending: true })
-    .order('id', { ascending: true })
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
     .limit(safeLimit);
   if (error) {
     console.error('[AI_FRIEND] Chat history load failed:', error.message);
     throw new AppError('Unable to load your saved conversation. Please try again.', 503, 'CHAT_HISTORY_UNAVAILABLE');
   }
-  return (data || []).map((row: any) => ({
+  return (data || []).reverse().map((row: any) => ({
     id: row.id,
     role: row.role,
     text: row.content,
