@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ArrowRight, Bot, CheckCircle2, LockKeyhole, MessageCircle, ShieldCheck } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { membershipService } from '../../services/membership';
-import { aiFriendService, AiFriendMessage, AiFriendSubscriptionStatus } from '../../services/aiFriend';
+import { aiFriendService, AiFriendMessage, AiFriendPersonality, AiFriendSubscriptionStatus } from '../../services/aiFriend';
 import { authService } from '../../services/auth';
 
 export const AiFriendSection: React.FC<{ standalone?: boolean }> = ({ standalone = false }) => {
@@ -24,6 +24,14 @@ export const AiFriendSection: React.FC<{ standalone?: boolean }> = ({ standalone
   const [quickAdultConfirmed, setQuickAdultConfirmed] = useState(false);
   const [quickSubmitting, setQuickSubmitting] = useState(false);
   const [previewLanguage, setPreviewLanguage] = useState<'en' | 'hi'>('en');
+  const [personality, setPersonality] = useState<AiFriendPersonality>('friend');
+  const personalities: { id: AiFriendPersonality; title: string; subtitle: string; emoji: string }[] = [
+    { id: 'friend', title: 'Dost', subtitle: 'Casual aur friendly', emoji: '😊' },
+    { id: 'listener', title: 'Listener', subtitle: 'Dhyan se sunega', emoji: '🤗' },
+    { id: 'motivator', title: 'Motivator', subtitle: 'Himmat aur encouragement', emoji: '💪' },
+    { id: 'funny', title: 'Funny', subtitle: 'Masti aur halka humour', emoji: '😄' },
+    { id: 'mentor', title: 'Mentor', subtitle: 'Ideas aur practical advice', emoji: '🧭' },
+  ];
 
   const refreshStatus = async () => {
     if (!isAuthenticated) { setStatus(null); return; }
@@ -135,7 +143,7 @@ export const AiFriendSection: React.FC<{ standalone?: boolean }> = ({ standalone
     setMessages(next);
     setSending(true);
     try {
-      const reply = await aiFriendService.sendMessage(text, messages.slice(-12));
+      const reply = await aiFriendService.sendMessage(text, messages.slice(-8), personality);
       setMessages([...next, { role: 'model', text: reply }]);
     } catch (err: any) {
       setError(err?.response?.data?.error?.message || 'AI Friend is temporarily unavailable. Please try again.');
@@ -193,6 +201,12 @@ export const AiFriendSection: React.FC<{ standalone?: boolean }> = ({ standalone
                 <button type="button" onClick={() => setPreviewLanguage('hi')} aria-pressed={previewLanguage === 'hi'} className={`rounded-full px-3 py-1 text-[11px] font-semibold transition ${previewLanguage === 'hi' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}>हिन्दी</button>
               </div>}
               <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[11px] font-semibold text-emerald-200">{canChat ? 'Active' : 'Preview'}</span>
+            </div>
+          </div>
+          <div className="mb-4 space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-semibold text-white">Choose your AI Friend’s personality</p><span className="text-[11px] text-slate-400">Change anytime</span></div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-5" role="group" aria-label="Choose AI Friend personality">
+              {personalities.map((option) => <button key={option.id} type="button" onClick={() => setPersonality(option.id)} aria-pressed={personality === option.id} className={`rounded-xl border p-2 text-left transition ${personality === option.id ? 'border-blue-400 bg-blue-500/20 ring-1 ring-blue-400/40' : 'border-white/10 bg-slate-950/40 hover:border-white/25'}`}><span className="block text-lg">{option.emoji}</span><span className="block text-xs font-bold text-white">{option.title}</span><span className="block text-[10px] leading-4 text-slate-400">{option.subtitle}</span></button>)}
             </div>
           </div>
           <div className="mb-4 min-h-48 space-y-3 rounded-2xl bg-slate-950/60 p-4">
