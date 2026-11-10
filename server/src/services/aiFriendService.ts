@@ -117,19 +117,28 @@ export async function getAiFriendChatHistory(
     .select('id, role, content, created_at')
     .eq('user_id', userId)
     .eq('personality', personality)
-    .order('created_at', { ascending: false })
-    .order('id', { ascending: false })
+    .order('created_at', { ascending: true })
     .limit(safeLimit);
   if (error) {
     console.error('[AI_FRIEND] Chat history load failed:', error.message);
     throw new AppError('Unable to load your saved conversation. Please try again.', 503, 'CHAT_HISTORY_UNAVAILABLE');
   }
-  return (data || []).reverse().map((row: any) => ({
-    id: row.id,
-    role: row.role,
-    text: row.content,
-    created_at: row.created_at,
-  }));
+  // Rows in one exchange can share the same transaction timestamp. UUIDs are
+  // random, so they cannot be used to infer message order. For timestamp ties,
+  // always render the user's message before the assistant's reply.
+  return (data || [])
+    .sort((a: any, b: any) => {
+      const timeDifference = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      if (timeDifference !== 0) return timeDifference;
+      if (a.role === b.role) return 0;
+      return a.role === 'user' ? -1 : 1;
+    })
+    .map((row: any) => ({
+      id: row.id,
+      role: row.role,
+      text: row.content,
+      created_at: row.created_at,
+    }));
 }
 
 export async function saveAiFriendExchange(
