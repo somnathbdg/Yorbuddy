@@ -84,6 +84,7 @@ export const Header: React.FC = () => {
     { id: 'become-buddy', label: 'Become a Buddy' },
     { id: 'safety', label: 'Safety' },
     { id: 'pricing', label: 'Pricing' },
+    { id: 'ai-friend', label: 'AI Friend' },
   ];
 
   const handleNavClick = (tabId: string) => {
