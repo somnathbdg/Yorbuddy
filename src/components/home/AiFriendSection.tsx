@@ -5,7 +5,7 @@ import { membershipService } from '../../services/membership';
 import { aiFriendService, AiFriendMessage, AiFriendSubscriptionStatus } from '../../services/aiFriend';
 import { authService } from '../../services/auth';
 
-export const AiFriendSection: React.FC = () => {
+export const AiFriendSection: React.FC<{ standalone?: boolean }> = ({ standalone = false }) => {
   const { isAuthenticated, setActiveTab } = useApp();
   const [confirmingAge, setConfirmingAge] = useState(false);
   const [status, setStatus] = useState<AiFriendSubscriptionStatus | null>(null);
@@ -153,7 +153,8 @@ export const AiFriendSection: React.FC = () => {
   ];
 
   return (
-    <section id="ai-friend" className="relative overflow-hidden bg-slate-950 py-20 sm:py-24">
+    <section id={standalone ? "ai-friend-page" : "ai-friend"} className={`relative overflow-hidden bg-slate-950 py-12 sm:py-16 ${standalone ? "min-h-[calc(100vh-7rem)] flex items-center" : "py-20 sm:py-24"}`}>
+      {standalone && <div className="absolute right-6 top-5 z-10 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-300">Dedicated AI Friend Space</div>}
       <div className="pointer-events-none absolute -left-24 top-0 h-72 w-72 rounded-full bg-blue-500/20 blur-3xl" />
       <div className="pointer-events-none absolute -right-20 bottom-0 h-72 w-72 rounded-full bg-pink-500/20 blur-3xl" />
       <div className="relative mx-auto grid max-w-7xl grid-cols-1 gap-10 px-4 sm:px-6 lg:grid-cols-2 lg:items-center lg:px-8">
@@ -233,3 +234,11 @@ export const AiFriendSection: React.FC = () => {
     </section>
   );
 };
+
+
+/** Full-page AI Friend experience, reusing the same verified access and chat flow. */
+export const AiFriendPage: React.FC = () => (
+  <div className="min-h-screen bg-slate-950">
+    <AiFriendSection standalone />
+  </div>
+);
