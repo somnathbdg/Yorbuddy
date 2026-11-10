@@ -7,7 +7,8 @@ export interface AiFriendVerificationStatus {
   adult_confirmed: boolean;
   is_fully_verified: boolean;
 }
-export interface AiFriendMessage { role: 'user' | 'model'; text: string; }
+export interface AiFriendMessage { id?: string; role: 'user' | 'model'; text: string; created_at?: string; }
+export type AiFriendPersonality = 'friend' | 'listener' | 'motivator' | 'funny' | 'mentor';
 export interface AiFriendPlan { id: string; name: string; amount: number; currency: 'INR'; duration_hours?: number; duration_days?: number; }
 export interface AiFriendSubscriptionStatus {
   verification: AiFriendVerificationStatus;
@@ -31,8 +32,12 @@ class AiFriendService {
     const response = await apiClient.post('/ai-friend/adult-confirmation', {});
     return response.data.data;
   }
-  async sendMessage(message: string, history: AiFriendMessage[]): Promise<string> {
-    const response = await apiClient.post('/ai-friend/chat', { message, history }, { timeout: 30000 });
+  async getHistory(personality: AiFriendPersonality): Promise<AiFriendMessage[]> {
+    const response = await apiClient.get(`/ai-friend/history/${personality}`);
+    return response.data.data.messages;
+  }
+  async sendMessage(message: string, personality: AiFriendPersonality = 'friend'): Promise<string> {
+    const response = await apiClient.post('/ai-friend/chat', { message, personality }, { timeout: 30000 });
     return response.data.data.reply;
   }
   async startTrial() {

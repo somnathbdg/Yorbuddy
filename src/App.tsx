@@ -10,7 +10,7 @@ import { TrustSafety } from './components/home/TrustSafety';
 import { WhyYorBuddy } from './components/home/WhyYorBuddy';
 import { FaqSection } from './components/home/FaqSection';
 import { FinalCTA } from './components/home/FinalCTA';
-import { AiFriendSection } from './components/home/AiFriendSection';
+import { AiFriendSection, AiFriendPage } from './components/home/AiFriendSection';
 import { BuddySearch } from './components/buddies/BuddySearch';
 import { BuddyProfileModal } from './components/buddies/BuddyProfileModal';
 import { BookingModal } from './components/booking/BookingModal';
@@ -95,13 +95,13 @@ const AppContent: React.FC = () => {
             {activeTab === 'home' && (
               <>
                 <Hero />
+                <AiFriendSection />
                 <ActivityCategoryStrip />
                 <FindABuddySection />
                 <HowItWorks />
                 <TrustSafety />
                 <WhyYorBuddy />
                 <FaqSection />
-                <AiFriendSection />
                 <FinalCTA />
               </>
             )}
@@ -119,6 +119,7 @@ const AppContent: React.FC = () => {
             {activeTab === 'safety' && <SafetyView />}
 
             {activeTab === 'pricing' && <PricingView />}
+            {activeTab === 'ai-friend' && <AiFriendPage />}
             {activeTab === 'verification' && (
               <AuthGuard
                 isAuthenticated={isAuthenticated}
