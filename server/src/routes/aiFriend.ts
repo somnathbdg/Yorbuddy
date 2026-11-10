@@ -111,3 +111,7 @@ router.post('/chat', authenticate, aiFriendMinuteLimiter, aiFriendDailyLimiter, 
     const reply = await sendAiFriendMessage(req.user!.id, context, parsed.data.message, parsed.data.personality);
     await saveAiFriendExchange(req.user!.id, parsed.data.personality, parsed.data.message, reply);
     res.status(200).json({ data: { reply } });
+  } catch (error) { next(error); }
+});
+
+export default router;
