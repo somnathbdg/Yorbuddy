@@ -42,6 +42,7 @@ const planSchema = z.object({ plan_id: z.enum(['DAY_1', 'WEEK_1', 'MONTH_1']) })
 
 const chatSchema = z.object({
   message: z.string().trim().min(1).max(1500),
+  personality: z.enum(['friend', 'listener', 'motivator', 'funny', 'mentor']).optional().default('friend'),
   history: z.array(z.object({
     role: z.enum(['user', 'model']),
     text: z.string().min(1).max(1200),
@@ -103,7 +104,8 @@ router.post('/chat', authenticate, aiFriendMinuteLimiter, aiFriendDailyLimiter, 
     const reply = await sendAiFriendMessage(
       req.user!.id,
       parsed.data.history as AiFriendMessage[],
-      parsed.data.message
+      parsed.data.message,
+      parsed.data.personality
     );
     res.status(200).json({ data: { reply } });
   } catch (error) {
