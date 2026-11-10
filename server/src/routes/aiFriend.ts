@@ -43,16 +43,7 @@ const planSchema = z.object({ plan_id: z.enum(['DAY_1', 'WEEK_1', 'MONTH_1']) })
 const chatSchema = z.object({
   message: z.string().trim().min(1).max(1500),
   personality: z.enum(['friend', 'listener', 'motivator', 'funny', 'mentor']).optional().default('friend'),
-  history: z.array(z.object({
-    role: z.enum(['user', 'model']),
-    text: z.string().min(1).max(1200),
-  }).strict()).max(8).optional().default([]),
 }).strict();
-
-router.post('/adult-confirmation', authenticate, async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const data = await confirmAiFriendAdultStatus(req.user!.id);
-    res.status(200).json({ data, message: '18+ confirmation saved.' });
   } catch (error) { next(error); }
 });
 
@@ -109,17 +100,9 @@ router.get('/history/:personality', authenticate, async (req: Request, res: Resp
 router.post('/chat', authenticate, aiFriendMinuteLimiter, aiFriendDailyLimiter, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const parsed = chatSchema.safeParse(req.body);
-    if (!parsed.success) throw BadRequest('Enter a message of up to 1,500 characters and up to 8 history messages.');
-    const reply = await sendAiFriendMessage(
-      req.user!.id,
-      parsed.data.history as AiFriendMessage[],
-      parsed.data.message,
-      parsed.data.personality
-    );
+    if (!parsed.success) throw BadRequest('Enter a message of up to 1,500 characters and choose a valid personality.');
+    const savedHistory = await getAiFriendChatHistory(req.user!.id, parsed.data.personality, 8);
+    const context: AiFriendMessage[] = savedHistory.map((item) => ({ role: item.role, text: item.text }));
+    const reply = await sendAiFriendMessage(req.user!.id, context, parsed.data.message, parsed.data.personality);
+    await saveAiFriendExchange(req.user!.id, parsed.data.personality, parsed.data.message, reply);
     res.status(200).json({ data: { reply } });
-  } catch (error) {
-    next(error);
-  }
-});
-
-export default router;
