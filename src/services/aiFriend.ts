@@ -32,8 +32,12 @@ class AiFriendService {
     const response = await apiClient.post('/ai-friend/adult-confirmation', {});
     return response.data.data;
   }
-  async sendMessage(message: string, history: AiFriendMessage[], personality: AiFriendPersonality = 'friend'): Promise<string> {
-    const response = await apiClient.post('/ai-friend/chat', { message, history, personality }, { timeout: 30000 });
+  async getHistory(personality: AiFriendPersonality): Promise<AiFriendMessage[]> {
+    const response = await apiClient.get(`/ai-friend/history/${personality}`);
+    return response.data.data.messages;
+  }
+  async sendMessage(message: string, personality: AiFriendPersonality = 'friend'): Promise<string> {
+    const response = await apiClient.post('/ai-friend/chat', { message, personality }, { timeout: 30000 });
     return response.data.data.reply;
   }
   async startTrial() {
