@@ -46,6 +46,21 @@ export const AiFriendSection: React.FC<{ standalone?: boolean }> = ({ standalone
   useEffect(() => {
     void refreshStatus();
   }, [isAuthenticated]);
+  useEffect(() => {
+    let cancelled = false;
+    if (!isAuthenticated) {
+      setMessagesByPersonality({});
+      return;
+    }
+    void aiFriendService.getHistory(personality).then((history) => {
+      if (!cancelled) {
+        setMessagesByPersonality((previous) => ({ ...previous, [personality]: history }));
+      }
+    }).catch((err: any) => {
+      if (!cancelled) setError(err?.response?.data?.error?.message || 'Unable to load your saved conversation.');
+    });
+    return () => { cancelled = true; };
+  }, [isAuthenticated, personality]);
 
   const openAccess = () => {
     if (!isAuthenticated) {
@@ -145,7 +160,7 @@ export const AiFriendSection: React.FC<{ standalone?: boolean }> = ({ standalone
     setCurrentMessages(next);
     setSending(true);
     try {
-      const reply = await aiFriendService.sendMessage(text, messages.slice(-8), personality);
+      const reply = await aiFriendService.sendMessage(text, personality);
       setCurrentMessages([...next, { role: 'model', text: reply }]);
     } catch (err: any) {
       setError(err?.response?.data?.error?.message || 'AI Friend is temporarily unavailable. Please try again.');
