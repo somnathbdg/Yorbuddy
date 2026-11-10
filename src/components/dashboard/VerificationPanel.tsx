@@ -28,7 +28,7 @@ export const EmailVerificationPanel: React.FC<EmailVerificationProps> = ({ onSta
   const [isVerifying, setIsVerifying] = useState(false);
   const [code, setCode] = useState('');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [devCode, setDevCode] = useState<string | null>(null);
+  const [codeRequested, setCodeRequested] = useState(false);
 
   useEffect(() => {
     checkStatus();
@@ -48,13 +48,10 @@ export const EmailVerificationPanel: React.FC<EmailVerificationProps> = ({ onSta
   const handleSendCode = async () => {
     setIsSendingCode(true);
     setMessage(null);
-    setDevCode(null);
     try {
       const res = await userService.requestEmailCode();
-      setMessage({ type: 'success', text: res.message });
-      if (res.dev_code) {
-        setDevCode(res.dev_code);
-      }
+      setCodeRequested(true);
+      setMessage({ type: 'success', text: res.message || 'Verification email sent. Enter the 6-digit code from your inbox.' });
     } catch (err: any) {
       const apiError = err.response?.data?.error;
       setMessage({ type: 'error', text: apiError?.message || 'Failed to send code.' });
@@ -120,7 +117,7 @@ export const EmailVerificationPanel: React.FC<EmailVerificationProps> = ({ onSta
 
       {!isVerified && (
         <>
-          {!devCode ? (
+          {!codeRequested ? (
             <button
               onClick={handleSendCode}
               disabled={isSendingCode}
@@ -136,7 +133,7 @@ export const EmailVerificationPanel: React.FC<EmailVerificationProps> = ({ onSta
           ) : (
             <div className="space-y-3">
               <div className="p-3 rounded-xl bg-blue-50 border border-blue-200">
-                <p className="text-xs text-blue-700 font-semibold mb-2">Enter the 6-digit code:</p>
+                <p className="text-xs text-blue-700 font-semibold mb-2">Enter the 6-digit code sent to your email:</p>
                 <input
                   type="text"
                   maxLength={6}
@@ -145,9 +142,6 @@ export const EmailVerificationPanel: React.FC<EmailVerificationProps> = ({ onSta
                   placeholder="000000"
                   className="w-full px-4 py-3 text-center text-2xl font-mono font-bold tracking-widest bg-white border border-blue-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
-                <p className="text-[10px] text-blue-600 mt-2 text-center">
-                  Dev mode — code: <span className="font-mono font-bold">{devCode}</span>
-                </p>
               </div>
 
               <button
@@ -164,7 +158,7 @@ export const EmailVerificationPanel: React.FC<EmailVerificationProps> = ({ onSta
               </button>
 
               <button
-                onClick={() => { setDevCode(null); setCode(''); }}
+                onClick={() => { setCodeRequested(false); setCode(''); setMessage(null); }}
                 className="w-full py-2 text-xs text-blue-600 hover:text-blue-700 font-medium"
               >
                 Resend Code
