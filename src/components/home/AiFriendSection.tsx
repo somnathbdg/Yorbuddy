@@ -13,6 +13,7 @@ export const AiFriendSection: React.FC<{ standalone?: boolean }> = ({ standalone
   const [sending, setSending] = useState(false);
   const [buying, setBuying] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
+  const [personality, setPersonality] = useState<AiFriendPersonality>('friend');
   const [messagesByPersonality, setMessagesByPersonality] = useState<Partial<Record<AiFriendPersonality, AiFriendMessage[]>>>({});
   const messages = messagesByPersonality[personality] || [];
   const setCurrentMessages = (next: AiFriendMessage[]) => setMessagesByPersonality((previous) => ({ ...previous, [personality]: next }));
@@ -26,7 +27,6 @@ export const AiFriendSection: React.FC<{ standalone?: boolean }> = ({ standalone
   const [quickAdultConfirmed, setQuickAdultConfirmed] = useState(false);
   const [quickSubmitting, setQuickSubmitting] = useState(false);
   const [previewLanguage, setPreviewLanguage] = useState<'en' | 'hi'>('en');
-  const [personality, setPersonality] = useState<AiFriendPersonality>('friend');
   const personalities: { id: AiFriendPersonality; title: string; subtitle: string; emoji: string }[] = [
     { id: 'friend', title: 'Dost', subtitle: 'Casual aur friendly', emoji: '😊' },
     { id: 'listener', title: 'Listener', subtitle: 'Dhyan se sunega', emoji: '🤗' },
