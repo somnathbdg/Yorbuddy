@@ -44,6 +44,11 @@ const chatSchema = z.object({
   message: z.string().trim().min(1).max(1500),
   personality: z.enum(['friend', 'listener', 'motivator', 'funny', 'mentor']).optional().default('friend'),
 }).strict();
+
+router.post('/adult-confirmation', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = await confirmAiFriendAdultStatus(req.user!.id);
+    res.status(200).json({ data, message: '18+ confirmation saved.' });
   } catch (error) { next(error); }
 });
 
