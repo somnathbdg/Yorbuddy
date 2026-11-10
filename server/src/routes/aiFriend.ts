@@ -3,7 +3,7 @@ import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { authenticate } from '../middleware/auth.js';
 import { BadRequest } from '../middleware/errorHandler.js';
-import { sendAiFriendMessage, AiFriendMessage, confirmAiFriendAdultStatus } from '../services/aiFriendService.js';
+import { sendAiFriendMessage, AiFriendMessage, confirmAiFriendAdultStatus, getAiFriendChatHistory, saveAiFriendExchange } from '../services/aiFriendService.js';
 import { createAiFriendPaymentOrder, getAiFriendSubscriptionStatus, startAiFriendFreeTrial, verifyAiFriendPayment } from '../services/aiFriendSubscriptionService.js';
 
 const router = Router();
@@ -94,6 +94,15 @@ router.post('/subscription/verify', authenticate, async (req: Request, res: Resp
     if (!parsed.success) throw BadRequest('Payment verification details are invalid.');
     const data = await verifyAiFriendPayment(req.user!.id, parsed.data);
     res.status(200).json({ data, message: 'AI Friend payment verified successfully.' });
+  } catch (error) { next(error); }
+});
+
+router.get('/history/:personality', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const parsed = z.enum(['friend', 'listener', 'motivator', 'funny', 'mentor']).safeParse(req.params.personality);
+    if (!parsed.success) throw BadRequest('Choose a valid AI Friend personality.');
+    const messages = await getAiFriendChatHistory(req.user!.id, parsed.data, 100);
+    res.status(200).json({ data: { personality: parsed.data, messages } });
   } catch (error) { next(error); }
 });
 
