@@ -7,7 +7,7 @@ export interface AiFriendVerificationStatus {
   adult_confirmed: boolean;
   is_fully_verified: boolean;
 }
-export interface AiFriendMessage { role: 'user' | 'model'; text: string; }
+export interface AiFriendMessage { id?: string; role: 'user' | 'model'; text: string; created_at?: string; }
 export type AiFriendPersonality = 'friend' | 'listener' | 'motivator' | 'funny' | 'mentor';
 export interface AiFriendPlan { id: string; name: string; amount: number; currency: 'INR'; duration_hours?: number; duration_days?: number; }
 export interface AiFriendSubscriptionStatus {
