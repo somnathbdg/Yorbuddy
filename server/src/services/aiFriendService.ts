@@ -117,7 +117,7 @@ export async function getAiFriendChatHistory(
     .select('id, role, content, created_at')
     .eq('user_id', userId)
     .eq('personality', personality)
-    .order('created_at', { ascending: true })
+    .order('created_at', { ascending: false })
     .limit(safeLimit);
   if (error) {
     console.error('[AI_FRIEND] Chat history load failed:', error.message);
@@ -127,6 +127,7 @@ export async function getAiFriendChatHistory(
   // random, so they cannot be used to infer message order. For timestamp ties,
   // always render the user's message before the assistant's reply.
   return (data || [])
+    .reverse()
     .sort((a: any, b: any) => {
       const timeDifference = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
       if (timeDifference !== 0) return timeDifference;
