@@ -13,7 +13,9 @@ export const AiFriendSection: React.FC<{ standalone?: boolean }> = ({ standalone
   const [sending, setSending] = useState(false);
   const [buying, setBuying] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
-  const [messages, setMessages] = useState<AiFriendMessage[]>([]);
+  const [messagesByPersonality, setMessagesByPersonality] = useState<Partial<Record<AiFriendPersonality, AiFriendMessage[]>>>({});
+  const messages = messagesByPersonality[personality] || [];
+  const setCurrentMessages = (next: AiFriendMessage[]) => setMessagesByPersonality((previous) => ({ ...previous, [personality]: next }));
   const [error, setError] = useState('');
   const [quickRegisterOpen, setQuickRegisterOpen] = useState(false);
   const [quickName, setQuickName] = useState('');
@@ -140,11 +142,11 @@ export const AiFriendSection: React.FC<{ standalone?: boolean }> = ({ standalone
     setDraft('');
     setError('');
     const next = [...messages, { role: 'user' as const, text }];
-    setMessages(next);
+    setCurrentMessages(next);
     setSending(true);
     try {
       const reply = await aiFriendService.sendMessage(text, messages.slice(-8), personality);
-      setMessages([...next, { role: 'model', text: reply }]);
+      setCurrentMessages([...next, { role: 'model', text: reply }]);
     } catch (err: any) {
       setError(err?.response?.data?.error?.message || 'AI Friend is temporarily unavailable. Please try again.');
       await refreshStatus();
@@ -164,7 +166,6 @@ export const AiFriendSection: React.FC<{ standalone?: boolean }> = ({ standalone
   const changePersonality = (next: AiFriendPersonality) => {
     if (next === personality || sending) return;
     setPersonality(next);
-    setMessages([]);
     setDraft('');
     setError('');
   };
