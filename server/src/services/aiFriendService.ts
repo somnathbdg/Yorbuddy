@@ -101,3 +101,50 @@ export async function sendAiFriendMessage(userId: string, history: AiFriendMessa
   if (!reply) throw new AppError('AI Friend returned an empty response. Please try again.', 502, 'AI_FRIEND_EMPTY_RESPONSE');
   return reply;
 }
+
+
+export const AI_FRIEND_PERSONALITIES: AiFriendPersonality[] = ['friend', 'listener', 'motivator', 'funny', 'mentor'];
+
+export async function getAiFriendChatHistory(
+  userId: string,
+  personality: AiFriendPersonality,
+  limit = 100,
+): Promise<Array<{ id: string; role: 'user' | 'model'; text: string; created_at: string }>> {
+  const supabase = getSupabase();
+  const safeLimit = Math.min(Math.max(Math.trunc(limit), 1), 100);
+  const { data, error } = await supabase
+    .from('ai_friend_messages')
+    .select('id, role, content, created_at')
+    .eq('user_id', userId)
+    .eq('personality', personality)
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true })
+    .limit(safeLimit);
+  if (error) {
+    console.error('[AI_FRIEND] Chat history load failed:', error.message);
+    throw new AppError('Unable to load your saved conversation. Please try again.', 503, 'CHAT_HISTORY_UNAVAILABLE');
+  }
+  return (data || []).map((row: any) => ({
+    id: row.id,
+    role: row.role,
+    text: row.content,
+    created_at: row.created_at,
+  }));
+}
+
+export async function saveAiFriendExchange(
+  userId: string,
+  personality: AiFriendPersonality,
+  userMessage: string,
+  assistantReply: string,
+): Promise<void> {
+  const supabase = getSupabase();
+  const { error } = await supabase.from('ai_friend_messages').insert([
+    { user_id: userId, personality, role: 'user', content: userMessage },
+    { user_id: userId, personality, role: 'model', content: assistantReply },
+  ]);
+  if (error) {
+    console.error('[AI_FRIEND] Chat history save failed:', error.message);
+    throw new AppError('Your reply was generated but could not be saved. Please try again.', 503, 'CHAT_HISTORY_SAVE_FAILED');
+  }
+}
