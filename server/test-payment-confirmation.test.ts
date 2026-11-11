@@ -5,6 +5,7 @@ import {
   verifyHmacSha256,
   canMarkPaymentFailed,
   isSameSuccessfulPayment,
+  getRawWebhookBody,
 } from './src/services/paymentConfirmation.js';
 
 test('accepts a valid Razorpay-style HMAC and rejects tampering', () => {
@@ -14,6 +15,10 @@ test('accepts a valid Razorpay-style HMAC and rejects tampering', () => {
   assert.equal(verifyHmacSha256(secret, message, signature), true);
   assert.equal(verifyHmacSha256(secret, message + '-tampered', signature), false);
   assert.equal(verifyHmacSha256(secret, message, 'not-hex'), false);
+  assert.equal(verifyHmacSha256(secret, message, 'a'.repeat(63)), false);
+  assert.equal(verifyHmacSha256(secret, message, 'g'.repeat(64)), false);
+  assert.equal(verifyHmacSha256(secret, message, signature.slice(0, 62)), false);
+  assert.equal(verifyHmacSha256(secret, message, signature.toUpperCase()), true);
   assert.equal(verifyHmacSha256(undefined, message, signature), false);
 });
 
@@ -30,4 +35,13 @@ test('successful callback replay requires the same payment ID', () => {
   assert.equal(isSameSuccessfulPayment('success', 'pay_1', 'pay_1'), true);
   assert.equal(isSameSuccessfulPayment('success', 'pay_1', 'pay_2'), false);
   assert.equal(isSameSuccessfulPayment('created', null, 'pay_1'), false);
+});
+
+test('webhook verification accepts only the original captured body', () => {
+  const original = Buffer.from('{ "event" : "payment.captured" }');
+  assert.equal(getRawWebhookBody(original), original.toString('utf8'));
+  assert.equal(getRawWebhookBody(original.toString('utf8')), original.toString('utf8'));
+  assert.equal(getRawWebhookBody(undefined), null);
+  assert.equal(getRawWebhookBody(''), null);
+  assert.equal(getRawWebhookBody({ event: 'payment.captured' }), null);
 });
