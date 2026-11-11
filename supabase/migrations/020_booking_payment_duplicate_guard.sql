@@ -130,4 +130,21 @@ REVOKE ALL ON FUNCTION public.confirm_booking_payment(uuid, text, text)
 GRANT EXECUTE ON FUNCTION public.confirm_booking_payment(uuid, text, text)
   TO service_role;
 
+
+-- The application uses its TypeScript verification service; no direct SQL/RPC
+-- caller was found in the inspected backend source. Keep the legacy helper
+-- available only to trusted backend code, with a pinned search_path.
+DO $function_hardening$
+BEGIN
+  IF to_regprocedure('public.is_user_verified(uuid)') IS NOT NULL THEN
+    ALTER FUNCTION public.is_user_verified(uuid)
+      SET search_path = pg_catalog, public;
+    REVOKE ALL ON FUNCTION public.is_user_verified(uuid)
+      FROM PUBLIC, anon, authenticated;
+    GRANT EXECUTE ON FUNCTION public.is_user_verified(uuid)
+      TO service_role;
+  END IF;
+END
+$function_hardening$;
+
 COMMIT;
