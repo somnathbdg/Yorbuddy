@@ -3,7 +3,7 @@ import { getSupabase } from '../config/database.js';
 import { env } from '../config/env.js';
 import { z } from 'zod';
 import { BadRequest, NotFound, Forbidden, Conflict } from '../middleware/errorHandler.js';
-import crypto from 'crypto';
+import { verifyHmacSha256, canMarkPaymentFailed } from './paymentConfirmation.js';
 import Razorpay from 'razorpay';
 
 // ========== Razorpay Client ==========
@@ -48,23 +48,11 @@ function verifyRazorpaySignature(orderId: string, paymentId: string, signature: 
     (err as any).statusCode = 503;
     throw err;
   }
-  const body = orderId + '|' + paymentId;
-  const expectedSignature = crypto
-    .createHmac('sha256', env.RAZORPAY_KEY_SECRET)
-    .update(body)
-    .digest('hex');
-  return expectedSignature === signature;
+  return verifyHmacSha256(env.RAZORPAY_KEY_SECRET, orderId + '|' + paymentId, signature);
 }
 
 function verifyWebhookSignature(rawBody: string, signature: string): boolean {
-  if (!env.RAZORPAY_WEBHOOK_SECRET) {
-    return false;
-  }
-  const expectedSignature = crypto
-    .createHmac('sha256', env.RAZORPAY_WEBHOOK_SECRET)
-    .update(rawBody)
-    .digest('hex');
-  return expectedSignature === signature;
+  return verifyHmacSha256(env.RAZORPAY_WEBHOOK_SECRET, rawBody, signature);
 }
 
 // ========== Controllers ==========
