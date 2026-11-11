@@ -32,3 +32,10 @@ INSERT INTO public.payments(id,booking_id,payment_type,status) VALUES
  ('10000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000001','booking','created'),
  ('10000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000001','booking','created'),
  ('10000000-0000-4000-8000-000000000003','00000000-0000-4000-8000-000000000002','booking','created');
+
+-- Simulate the legacy helper created by historical verification migrations.
+CREATE OR REPLACE FUNCTION public.is_user_verified(check_user_id uuid)
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+AS $$ SELECT false $$;
