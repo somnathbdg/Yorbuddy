@@ -3,7 +3,7 @@ import { getSupabase } from '../config/database.js';
 import { env } from '../config/env.js';
 import { z } from 'zod';
 import { BadRequest, NotFound, Forbidden, Conflict } from '../middleware/errorHandler.js';
-import crypto from 'crypto';
+import { verifyHmacSha256 } from './paymentConfirmation.js';
 import Razorpay from 'razorpay';
 
 // ========== Razorpay Client ==========
@@ -48,23 +48,11 @@ function verifyRazorpaySignature(orderId: string, paymentId: string, signature: 
     (err as any).statusCode = 503;
     throw err;
   }
-  const body = orderId + '|' + paymentId;
-  const expectedSignature = crypto
-    .createHmac('sha256', env.RAZORPAY_KEY_SECRET)
-    .update(body)
-    .digest('hex');
-  return expectedSignature === signature;
+  return verifyHmacSha256(env.RAZORPAY_KEY_SECRET, orderId + '|' + paymentId, signature);
 }
 
 function verifyWebhookSignature(rawBody: string, signature: string): boolean {
-  if (!env.RAZORPAY_WEBHOOK_SECRET) {
-    return false;
-  }
-  const expectedSignature = crypto
-    .createHmac('sha256', env.RAZORPAY_WEBHOOK_SECRET)
-    .update(rawBody)
-    .digest('hex');
-  return expectedSignature === signature;
+  return verifyHmacSha256(env.RAZORPAY_WEBHOOK_SECRET, rawBody, signature);
 }
 
 // ========== Controllers ==========
@@ -215,12 +203,18 @@ export async function verifyPayment(req: Request, res: Response, next: NextFunct
       throw Forbidden('You do not have permission to verify this payment.');
     }
 
-    if (payment.status === 'success') {
-      res.status(200).json({
-        data: { payment_id: payment.razorpay_payment_id, status: 'success' },
-        message: 'Payment already verified.',
-      });
-      return;
+    // Verify the signed callback before any state transition, including replays.
+    const isValid = verifyRazorpaySignature(
+      input.razorpay_order_id,
+      input.razorpay_payment_id,
+      input.razorpay_signature
+    );
+    if (!isValid) {
+      throw BadRequest('Invalid payment signature. Payment verification failed.');
+    }
+
+    if (payment.status === 'success' && payment.razorpay_payment_id !== input.razorpay_payment_id) {
+      throw Conflict('This order is already paid with a different payment ID.');
     }
 
     // Fetch the booking to check if it's expired before confirming
@@ -242,39 +236,17 @@ export async function verifyPayment(req: Request, res: Response, next: NextFunct
       throw BadRequest('Cannot confirm payment for a cancelled or rejected booking.');
     }
 
-    const isValid = verifyRazorpaySignature(
-      input.razorpay_order_id,
-      input.razorpay_payment_id,
-      input.razorpay_signature
-    );
-
-    if (!isValid) {
-      await supabase
-        .from('payments')
-        .update({ status: 'failed' })
-        .eq('id', payment.id);
-
-      throw BadRequest('Invalid payment signature. Payment verification failed.');
+    // The database function serializes concurrent client/webhook callbacks and
+    // commits payment success + booking confirmation in one transaction.
+    const { error: confirmationError } = await supabase.rpc('confirm_booking_payment', {
+      p_payment_record_id: payment.id,
+      p_razorpay_payment_id: input.razorpay_payment_id,
+      p_razorpay_signature: input.razorpay_signature,
+    });
+    if (confirmationError) {
+      console.error('[PAYMENT] Atomic booking confirmation failed:', confirmationError.message);
+      throw Conflict('Payment could not be reconciled safely. Please contact support before retrying.');
     }
-
-    const { error: updateError } = await supabase
-      .from('payments')
-      .update({
-        razorpay_payment_id: input.razorpay_payment_id,
-        razorpay_signature: input.razorpay_signature,
-        status: 'success',
-        payment_method: 'razorpay',
-      })
-      .eq('id', payment.id);
-
-    if (updateError) {
-      throw updateError;
-    }
-
-    await supabase
-      .from('bookings')
-      .update({ status: 'confirmed' })
-      .eq('id', payment.booking_id);
 
     res.status(200).json({
       data: {
@@ -331,36 +303,50 @@ export async function handleWebhook(req: Request, res: Response, next: NextFunct
         const orderId = paymentPayload?.payment?.entity?.order_id || paymentPayload?.order?.entity?.id;
         const paymentId = paymentPayload?.payment?.entity?.id;
 
-        const { data: payment } = await supabase
+        if (typeof orderId !== 'string' || typeof paymentId !== 'string' || !paymentId) {
+          throw BadRequest('Webhook capture event is missing its order or payment ID.');
+        }
+
+        const { data: payment, error: paymentLookupError } = await supabase
           .from('payments')
-          .select('*')
+          .select('id, status, razorpay_payment_id')
           .eq('razorpay_order_id', orderId)
-          .single();
+          .maybeSingle();
 
-        if (payment && payment.status !== 'success') {
-          await supabase
-            .from('payments')
-            .update({
-              razorpay_payment_id: paymentId,
-              status: 'success',
-              payment_method: 'razorpay',
-            })
-            .eq('id', payment.id);
-
-          await supabase
-            .from('bookings')
-            .update({ status: 'confirmed' })
-            .eq('id', payment.booking_id);
+        if (paymentLookupError) throw paymentLookupError;
+        if (payment && payment.status === 'success' && payment.razorpay_payment_id !== paymentId) {
+          console.error('[WEBHOOK] Conflicting payment ID for an already successful order:', orderId);
+          break;
+        }
+        if (payment) {
+          const { error: confirmationError } = await supabase.rpc('confirm_booking_payment', {
+            p_payment_record_id: payment.id,
+            p_razorpay_payment_id: paymentId,
+            p_razorpay_signature: null,
+          });
+          if (confirmationError) {
+            console.error('[WEBHOOK] Atomic booking confirmation failed:', confirmationError.message);
+            throw confirmationError;
+          }
+        } else {
+          console.warn('[WEBHOOK] No local payment record for captured order:', orderId);
         }
         break;
       }
       case 'payment.failed': {
         const orderId = paymentPayload?.payment?.entity?.order_id;
 
-        await supabase
+        if (typeof orderId !== 'string' || !orderId) {
+          throw BadRequest('Webhook failure event is missing its order ID.');
+        }
+
+        // A delayed failure event must never downgrade success or another terminal state.
+        const { error: failureUpdateError } = await supabase
           .from('payments')
           .update({ status: 'failed' })
-          .eq('razorpay_order_id', orderId);
+          .eq('razorpay_order_id', orderId)
+          .in('status', ['initiated', 'created', 'pending', 'processing']);
+        if (failureUpdateError) throw failureUpdateError;
         break;
       }
       default:
