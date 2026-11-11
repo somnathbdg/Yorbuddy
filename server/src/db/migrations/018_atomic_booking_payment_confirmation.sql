@@ -1,5 +1,10 @@
 -- Migration 018: atomically confirm a booking and its successful payment.
--- The function is invoked only by the backend service-role client.
+-- Called by the backend after Razorpay signature verification or a verified webhook.
+-- Idempotency policy:
+--   * success + same Razorpay payment ID: safe replay; booking remains/turns confirmed.
+--   * success + different payment ID: reject.
+--   * failed/cancelled/refunded (or any unknown state): reject; never resurrect a payment.
+--   * only initiated/created/pending/processing may transition to success.
 CREATE OR REPLACE FUNCTION public.confirm_booking_payment(
   p_payment_record_id UUID,
   p_razorpay_payment_id TEXT,
@@ -12,27 +17,54 @@ SET search_path = public
 AS $$
 DECLARE
   v_booking_id UUID;
+  v_payment_type TEXT;
   v_payment_status TEXT;
   v_existing_payment_id TEXT;
   v_booking_status TEXT;
   v_rows INTEGER;
 BEGIN
-  IF p_payment_record_id IS NULL OR p_razorpay_payment_id IS NULL OR length(trim(p_razorpay_payment_id)) = 0 THEN
-    RAISE EXCEPTION 'Payment confirmation requires a payment record and Razorpay payment ID';
+  IF p_payment_record_id IS NULL THEN
+    RAISE EXCEPTION 'Payment confirmation requires a payment record ID'
+      USING ERRCODE = '22023';
   END IF;
 
-  SELECT booking_id, status, razorpay_payment_id
-    INTO v_booking_id, v_payment_status, v_existing_payment_id
+  IF p_razorpay_payment_id IS NULL OR length(btrim(p_razorpay_payment_id)) = 0 THEN
+    RAISE EXCEPTION 'Payment confirmation requires a Razorpay payment ID'
+      USING ERRCODE = '22023';
+  END IF;
+
+  -- Lock the payment first so concurrent webhook/client callbacks serialize.
+  SELECT booking_id, payment_type, status, razorpay_payment_id
+    INTO v_booking_id, v_payment_type, v_payment_status, v_existing_payment_id
     FROM public.payments
    WHERE id = p_payment_record_id
    FOR UPDATE;
 
   IF NOT FOUND THEN
-    RAISE EXCEPTION 'Payment record not found';
+    RAISE EXCEPTION 'Payment record not found'
+      USING ERRCODE = 'P0002';
   END IF;
 
-  IF v_payment_status = 'success' AND v_existing_payment_id IS DISTINCT FROM p_razorpay_payment_id THEN
-    RAISE EXCEPTION 'Payment record is already successful with a different Razorpay payment ID';
+  IF v_payment_type IS DISTINCT FROM 'booking' THEN
+    RAISE EXCEPTION 'Payment record is not a booking payment'
+      USING ERRCODE = '22023';
+  END IF;
+
+  IF v_booking_id IS NULL THEN
+    RAISE EXCEPTION 'Booking payment is missing its booking_id'
+      USING ERRCODE = '23502';
+  END IF;
+
+  -- A successful callback may be replayed only for the same Razorpay payment.
+  IF v_payment_status = 'success' THEN
+    IF v_existing_payment_id IS DISTINCT FROM p_razorpay_payment_id THEN
+      RAISE EXCEPTION 'Payment record is already successful with a different Razorpay payment ID'
+        USING ERRCODE = '23505';
+    END IF;
+  ELSIF v_payment_status NOT IN ('initiated', 'created', 'pending', 'processing') THEN
+    -- In particular, failed/cancelled/refunded records cannot be resurrected.
+    RAISE EXCEPTION 'Payment cannot transition to success from status %', v_payment_status
+      USING ERRCODE = '22023';
   END IF;
 
   SELECT status
@@ -42,11 +74,13 @@ BEGIN
    FOR UPDATE;
 
   IF NOT FOUND THEN
-    RAISE EXCEPTION 'Booking associated with payment was not found';
+    RAISE EXCEPTION 'Booking associated with payment was not found'
+      USING ERRCODE = 'P0002';
   END IF;
 
   IF v_booking_status NOT IN ('pending', 'confirmed') THEN
-    RAISE EXCEPTION 'Booking cannot be confirmed from status %', v_booking_status;
+    RAISE EXCEPTION 'Booking cannot be confirmed from status %', v_booking_status
+      USING ERRCODE = '22023';
   END IF;
 
   UPDATE public.payments
