@@ -1,17 +1,16 @@
 name: AI Friend build and security checks
-# Lockfiles are normalized by the dependency-audit job before the strict audit step.
 
 on:
   push:
     branches:
-      - feature/staging-ai-friend-integration
+      - main
   pull_request:
     branches:
-      - feature/secure-kyc-storage
+      - main
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   security-events: write
 
 jobs:
@@ -51,26 +50,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
-          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      - name: Apply non-breaking security fixes to lockfiles
-        run: |
-          npm audit fix --package-lock-only || true
-          (cd server && npm audit fix --package-lock-only) || true
-      - name: Commit lockfile-only security updates
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package-lock.json server/package-lock.json
-          if ! git diff --cached --quiet; then
-            git commit -m "chore(security): update vulnerable dependency lockfiles"
-            git push origin HEAD:${{ github.event.pull_request.head.ref || github.ref_name }}
-          fi
       - name: Audit frontend production dependencies
         run: npm audit --omit=dev --audit-level=high
       - name: Audit backend production dependencies
