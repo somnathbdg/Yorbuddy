@@ -3,7 +3,7 @@ name: AI Friend Quick Registration Validation
 on:
   push:
     branches:
-      - feature/ai-friend-quick-registration
+      - main
   pull_request:
     branches:
       - feature/ai-friend-quick-registration
