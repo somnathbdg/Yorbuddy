@@ -47,6 +47,23 @@ BEGIN
   IF NOT has_function_privilege('service_role','public.confirm_booking_payment(uuid,text,text)','EXECUTE') THEN
     RAISE EXCEPTION 'service_role cannot execute payment confirmation';
   END IF;
+
+  IF has_function_privilege('anon','public.is_user_verified(uuid)','EXECUTE') THEN
+    RAISE EXCEPTION 'anon can execute legacy verification helper';
+  END IF;
+  IF has_function_privilege('authenticated','public.is_user_verified(uuid)','EXECUTE') THEN
+    RAISE EXCEPTION 'authenticated can execute legacy verification helper';
+  END IF;
+  IF NOT has_function_privilege('service_role','public.is_user_verified(uuid)','EXECUTE') THEN
+    RAISE EXCEPTION 'service_role cannot execute legacy verification helper';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+     WHERE n.nspname='public' AND p.proname='is_user_verified'
+       AND p.proconfig @> ARRAY['search_path=pg_catalog, public']
+  ) THEN
+    RAISE EXCEPTION 'legacy verification helper search_path is not pinned';
+  END IF;
 END $$;
 
 ROLLBACK;
