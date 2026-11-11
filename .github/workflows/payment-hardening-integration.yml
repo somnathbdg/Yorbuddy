@@ -1,0 +1,45 @@
+name: Payment hardening PostgreSQL integration
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/020_booking_payment_duplicate_guard.sql'
+      - 'server/src/db/migrations/020_booking_payment_duplicate_guard.sql'
+      - 'server/test/**'
+      - '.github/workflows/payment-hardening-integration.yml'
+  push:
+    branches: [fix/payment-hardening-integration-tests]
+
+jobs:
+  postgres-integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: yorbuddy_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d yorbuddy_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Prepare disposable schema
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d yorbuddy_test -v ON_ERROR_STOP=1 -f server/test/fixtures/payment-hardening-setup.sql
+      - name: Apply duplicate-payment guard migration
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d yorbuddy_test -v ON_ERROR_STOP=1 -f supabase/migrations/020_booking_payment_duplicate_guard.sql
+      - name: Verify idempotency, duplicate rejection and grants
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d yorbuddy_test -v ON_ERROR_STOP=1 -f server/test/payment-hardening.integration.sql
