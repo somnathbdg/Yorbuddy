@@ -3,7 +3,7 @@ import { getSupabase } from '../config/database.js';
 import { env } from '../config/env.js';
 import { z } from 'zod';
 import { BadRequest, NotFound, Forbidden } from '../middleware/errorHandler.js';
-import crypto from 'crypto';
+import { verifyHmacSha256 } from './paymentConfirmation.js';
 import Razorpay from 'razorpay';
 
 let razorpayInstance: any = null;
@@ -88,9 +88,7 @@ const verifySchema = z.object({
 }).strict();
 
 function verifyRazorpaySignature(orderId: string, paymentId: string, signature: string): boolean {
-  const body = orderId + '|' + paymentId;
-  const expected = crypto.createHmac('sha256', env.RAZORPAY_KEY_SECRET).update(body).digest('hex');
-  return expected === signature;
+  return verifyHmacSha256(env.RAZORPAY_KEY_SECRET, orderId + '|' + paymentId, signature);
 }
 
 function calculateExpiry(planId: PlanId, start: Date): Date | null {
@@ -240,15 +238,16 @@ export async function verifyMembershipPayment(req: Request, res: Response, next:
 
     if (mErr || !m) throw NotFound('Membership record not found.');
     if (m.user_id !== userId) throw Forbidden('Access denied.');
+    // Verify the signature before handling any state, including idempotent replays.
+    const valid = verifyRazorpaySignature(input.razorpay_order_id, input.razorpay_payment_id, input.razorpay_signature);
+    if (!valid) throw BadRequest('Invalid signature.');
+
     if (m.status === 'success') {
+      if (m.razorpay_payment_id !== input.razorpay_payment_id) {
+        throw BadRequest('This membership order is already paid with a different payment ID.');
+      }
       res.status(200).json({ data: { membership_id: m.id, status: 'success', plan_id: m.plan_id } });
       return;
-    }
-
-    const valid = verifyRazorpaySignature(input.razorpay_order_id, input.razorpay_payment_id, input.razorpay_signature);
-    if (!valid) {
-      await supabase.from('memberships').update({ status: 'failed' }).eq('id', m.id);
-      throw BadRequest('Invalid signature.');
     }
 
     const start = new Date();
