@@ -257,24 +257,16 @@ export async function verifyPayment(req: Request, res: Response, next: NextFunct
       throw BadRequest('Invalid payment signature. Payment verification failed.');
     }
 
-    const { error: updateError } = await supabase
-      .from('payments')
-      .update({
-        razorpay_payment_id: input.razorpay_payment_id,
-        razorpay_signature: input.razorpay_signature,
-        status: 'success',
-        payment_method: 'razorpay',
-      })
-      .eq('id', payment.id);
-
-    if (updateError) {
-      throw updateError;
+    // Commit payment success and booking confirmation in one database transaction.
+    const { error: confirmationError } = await supabase.rpc('confirm_booking_payment', {
+      p_payment_record_id: payment.id,
+      p_razorpay_payment_id: input.razorpay_payment_id,
+      p_razorpay_signature: input.razorpay_signature,
+    });
+    if (confirmationError) {
+      console.error('[PAYMENT] Atomic booking confirmation failed:', confirmationError.message);
+      throw new Error('Payment verification could not be fully reconciled. Please contact support before retrying.');
     }
-
-    await supabase
-      .from('bookings')
-      .update({ status: 'confirmed' })
-      .eq('id', payment.booking_id);
 
     res.status(200).json({
       data: {
@@ -331,26 +323,25 @@ export async function handleWebhook(req: Request, res: Response, next: NextFunct
         const orderId = paymentPayload?.payment?.entity?.order_id || paymentPayload?.order?.entity?.id;
         const paymentId = paymentPayload?.payment?.entity?.id;
 
-        const { data: payment } = await supabase
+        const { data: payment, error: paymentLookupError } = await supabase
           .from('payments')
-          .select('*')
+          .select('id, status')
           .eq('razorpay_order_id', orderId)
           .single();
 
+        if (paymentLookupError && paymentLookupError.code !== 'PGRST116') {
+          throw paymentLookupError;
+        }
         if (payment && payment.status !== 'success') {
-          await supabase
-            .from('payments')
-            .update({
-              razorpay_payment_id: paymentId,
-              status: 'success',
-              payment_method: 'razorpay',
-            })
-            .eq('id', payment.id);
-
-          await supabase
-            .from('bookings')
-            .update({ status: 'confirmed' })
-            .eq('id', payment.booking_id);
+          const { error: confirmationError } = await supabase.rpc('confirm_booking_payment', {
+            p_payment_record_id: payment.id,
+            p_razorpay_payment_id: paymentId,
+            p_razorpay_signature: null,
+          });
+          if (confirmationError) {
+            console.error('[WEBHOOK] Atomic booking confirmation failed:', confirmationError.message);
+            throw confirmationError;
+          }
         }
         break;
       }
