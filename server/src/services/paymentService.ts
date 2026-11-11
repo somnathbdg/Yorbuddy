@@ -3,7 +3,7 @@ import { getSupabase } from '../config/database.js';
 import { env } from '../config/env.js';
 import { z } from 'zod';
 import { BadRequest, NotFound, Forbidden, Conflict } from '../middleware/errorHandler.js';
-import { verifyHmacSha256, canMarkPaymentFailed } from './paymentConfirmation.js';
+import { verifyHmacSha256 } from './paymentConfirmation.js';
 import Razorpay from 'razorpay';
 
 // ========== Razorpay Client ==========
