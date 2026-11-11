@@ -84,16 +84,33 @@ function loadEnv(): EnvConfig {
 export const env = loadEnv();
 
 /**
- * Warn if JWT secrets are still set to development defaults.
- * This helps prevent accidental production use of weak secrets.
+ * Fail closed when production is configured with weak or reused JWT secrets.
+ * Each secret must be independently generated, unique, and at least 32 chars.
  */
 if (env.NODE_ENV === 'production') {
-  if (env.JWT_ACCESS_SECRET === 'dev-access-secret-change-me') {
-    console.error('[SECURITY WARNING] JWT_ACCESS_SECRET is still set to the default development value.');
-    console.error('[SECURITY WARNING] Set a strong, unique JWT_ACCESS_SECRET in production.');
+  const insecureDefaults = new Set([
+    'dev-access-secret-change-me',
+    'dev-refresh-secret-change-me',
+    'change-me',
+    'changeme',
+    'secret',
+    'password',
+  ]);
+  const accessSecret = env.JWT_ACCESS_SECRET.trim();
+  const refreshSecret = env.JWT_REFRESH_SECRET.trim();
+  const problems: string[] = [];
+
+  if (accessSecret.length < 32 || insecureDefaults.has(accessSecret.toLowerCase())) {
+    problems.push('JWT_ACCESS_SECRET must be a unique secret of at least 32 characters.');
   }
-  if (env.JWT_REFRESH_SECRET === 'dev-refresh-secret-change-me') {
-    console.error('[SECURITY WARNING] JWT_REFRESH_SECRET is still set to the default development value.');
-    console.error('[SECURITY WARNING] Set a strong, unique JWT_REFRESH_SECRET in production.');
+  if (refreshSecret.length < 32 || insecureDefaults.has(refreshSecret.toLowerCase())) {
+    problems.push('JWT_REFRESH_SECRET must be a unique secret of at least 32 characters.');
+  }
+  if (accessSecret === refreshSecret) {
+    problems.push('JWT_ACCESS_SECRET and JWT_REFRESH_SECRET must be different values.');
+  }
+
+  if (problems.length > 0) {
+    throw new Error(`Unsafe production JWT configuration: ${problems.join(' ')}`);
   }
 }
