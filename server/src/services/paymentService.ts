@@ -3,7 +3,7 @@ import { getSupabase } from '../config/database.js';
 import { env } from '../config/env.js';
 import { z } from 'zod';
 import { BadRequest, NotFound, Forbidden, Conflict } from '../middleware/errorHandler.js';
-import { verifyHmacSha256 } from './paymentConfirmation.js';
+import { verifyHmacSha256, getRawWebhookBody } from './paymentConfirmation.js';
 import Razorpay from 'razorpay';
 
 // ========== Razorpay Client ==========
@@ -276,7 +276,11 @@ export async function handleWebhook(req: Request, res: Response, next: NextFunct
       return;
     }
 
-    const rawBody = (req as any).rawBody || (Buffer.isBuffer(req.body) ? req.body.toString('utf8') : JSON.stringify(req.body));
+    const rawBody = getRawWebhookBody((req as any).rawBody);
+    if (rawBody === null) {
+      res.status(400).json({ error: 'Original webhook body unavailable' });
+      return;
+    }
 
     const isValid = verifyWebhookSignature(rawBody, signature);
 
