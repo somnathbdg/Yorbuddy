@@ -43,3 +43,16 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -d yorbuddy_test -v ON_ERROR_STOP=1 -f server/test/payment-hardening.integration.sql
+      - name: Reset fixture for concurrent callback test
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d yorbuddy_test -v ON_ERROR_STOP=1 -f server/test/fixtures/payment-hardening-setup.sql
+          psql -h localhost -U postgres -d yorbuddy_test -v ON_ERROR_STOP=1 -f supabase/migrations/020_booking_payment_duplicate_guard.sql
+      - name: Run two-session concurrent callback test
+        env:
+          PGPASSWORD: postgres
+          PGHOST: localhost
+          PGUSER: postgres
+          PGDATABASE: yorbuddy_test
+        run: bash server/test/concurrent-payment-confirmation.sh
