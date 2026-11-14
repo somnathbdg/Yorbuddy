@@ -27,23 +27,6 @@ BEGIN
     RAISE EXCEPTION 'payment confirmation affected an unrelated booking';
   END IF;
 
-  -- Simulate the payment.failed webhook's guarded update. A late failure must
-  -- not downgrade a successful payment; a still-created payment may fail.
-  UPDATE public.payments SET status='failed'
-   WHERE razorpay_order_id='order_test_1'
-     AND status IN ('initiated','created','pending','processing');
-  IF (SELECT status FROM public.payments
-       WHERE id='10000000-0000-4000-8000-000000000001') <> 'success' THEN
-    RAISE EXCEPTION 'late payment.failed callback downgraded successful payment';
-  END IF;
-  UPDATE public.payments SET status='failed'
-   WHERE razorpay_order_id='order_test_3'
-     AND status IN ('initiated','created','pending','processing');
-  IF (SELECT status FROM public.payments
-       WHERE id='10000000-0000-4000-8000-000000000003') <> 'failed' THEN
-    RAISE EXCEPTION 'payment.failed callback did not update an open payment';
-  END IF;
-
   BEGIN
     PERFORM public.confirm_booking_payment(
       '10000000-0000-4000-8000-000000000002','pay_second_1','sig_2'
@@ -65,6 +48,23 @@ BEGIN
   EXCEPTION WHEN unique_violation THEN
     NULL;
   END;
+
+  -- Simulate the payment.failed webhook's guarded update. A late failure must
+  -- not downgrade a successful payment; a still-created payment may fail.
+  UPDATE public.payments SET status='failed'
+   WHERE razorpay_order_id='order_test_1'
+     AND status IN ('initiated','created','pending','processing');
+  IF (SELECT status FROM public.payments
+       WHERE id='10000000-0000-4000-8000-000000000001') <> 'success' THEN
+    RAISE EXCEPTION 'late payment.failed callback downgraded successful payment';
+  END IF;
+  UPDATE public.payments SET status='failed'
+   WHERE razorpay_order_id='order_test_3'
+     AND status IN ('initiated','created','pending','processing');
+  IF (SELECT status FROM public.payments
+       WHERE id='10000000-0000-4000-8000-000000000003') <> 'failed' THEN
+    RAISE EXCEPTION 'payment.failed callback did not update an open payment';
+  END IF;
 
   IF has_function_privilege('anon','public.confirm_booking_payment(uuid,text,text)','EXECUTE') THEN
     RAISE EXCEPTION 'anon can execute payment confirmation';
