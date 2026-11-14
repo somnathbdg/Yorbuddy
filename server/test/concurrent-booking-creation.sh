@@ -9,18 +9,24 @@ export PGHOST PGUSER PGDATABASE PGPASSWORD
 tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT
 call_rpc() {
-  local booking_code="$1" user_id="$2" time="$3"
-  psql -v ON_ERROR_STOP=1 -Atc "SELECT (public.create_booking_atomic(
-    '$booking_code', '$user_id',
-    'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
-    'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
-    DATE '2026-12-15', TIME '$time', 2, 500, 1000, 0, 1000,
-    now() + interval '30 minutes', 'Test venue', 'Test address', NULL
-  )).id;"
+  local booking_code="$1" user_id="$2" time="$3" hold_seconds="${4:-0}"
+  local hold_sql=""
+  if [[ "$hold_seconds" -gt 0 ]]; then hold_sql="SELECT pg_sleep($hold_seconds);"; fi
+  psql -v ON_ERROR_STOP=1 -Atc "BEGIN;
+    SELECT (public.create_booking_atomic(
+      '$booking_code', '$user_id',
+      'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+      DATE '2026-12-15', TIME '$time', 2, 500, 1000, 0, 1000,
+      now() + interval '30 minutes', 'Test venue', 'Test address', NULL
+    )).id;
+    $hold_sql
+    COMMIT;"
 }
 
-# Both independent sessions race for the same buddy/time interval.
-call_rpc 'RACE-A' 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' '10:00' >"$tmpdir/a.log" 2>&1 &
+# Session A deliberately holds the transaction lock while session B attempts
+# the overlapping reservation from a genuinely concurrent connection.
+call_rpc 'RACE-A' 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' '10:00' 1 >"$tmpdir/a.log" 2>&1 &
 pid_a=$!
 sleep 0.15
 set +e
