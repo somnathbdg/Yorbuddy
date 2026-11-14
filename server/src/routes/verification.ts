@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import express, { Router } from 'express';
 import {
   requestEmailCode,
   verifyEmail,
@@ -10,6 +10,7 @@ import {
 } from '../services/verificationService.js';
 import { authenticate } from '../middleware/auth.js';
 import { verificationLimiter } from '../middleware/security.js';
+import { uploadKycObject } from '../services/kycStorageService.js';
 
 /**
  * ============================================================================
@@ -55,8 +56,18 @@ router.post('/phone/verify', authenticate, verificationLimiter, verifyPhone);
 
 // ========== KYC (Know Your Customer) ==========
 
+// POST /api/kyc/upload/:kind (kind=document|selfie)
+// Binary upload; parser is route-scoped so JSON endpoints remain unchanged.
+router.post(
+  '/upload/:kind',
+  authenticate,
+  verificationLimiter,
+  express.raw({ type: ['image/jpeg', 'image/png', 'application/pdf'], limit: '5mb' }),
+  uploadKycObject,
+);
+
 // POST /api/kyc/submit
-// Submit KYC documents for admin review
+// Submit private object paths for admin review
 router.post('/submit', authenticate, verificationLimiter, submitKyc);
 
 // GET /api/kyc/status
