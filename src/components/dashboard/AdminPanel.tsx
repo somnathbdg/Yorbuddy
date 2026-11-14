@@ -66,6 +66,22 @@ export const AdminPanel: React.FC = () => {
   const [safetyReportCount, setSafetyReportCount] = useState(0);
   const [isLoadingKyc, setIsLoadingKyc] = useState(false);
   const [kycError, setKycError] = useState<string | null>(null);
+  const [selectedKyc, setSelectedKyc] = useState<any>(null);
+  const [isLoadingKycDetail, setIsLoadingKycDetail] = useState(false);
+  const [kycPreviewError, setKycPreviewError] = useState<string | null>(null);
+
+  const handleViewKyc = async (id: string) => {
+    setIsLoadingKycDetail(true);
+    setKycPreviewError(null);
+    try {
+      const response = await userService.getKycById(id);
+      setSelectedKyc(response.data);
+    } catch (err: any) {
+      setKycPreviewError(err.response?.data?.error?.message || 'Unable to load private KYC preview.');
+    } finally {
+      setIsLoadingKycDetail(false);
+    }
+  };
 
   // Admin bookings pagination state
   const [adminBookings, setAdminBookings] = useState<Booking[]>([]);
@@ -394,6 +410,12 @@ export const AdminPanel: React.FC = () => {
 
                     <div className="flex items-center space-x-2">
                       <button
+                        onClick={() => handleViewKyc(kyc.id)}
+                        className="px-4 py-2 rounded-xl border border-blue-200 text-blue-700 hover:bg-blue-50 text-xs font-bold flex items-center space-x-1"
+                      >
+                        <Eye className="w-3.5 h-3.5" /><span>View documents</span>
+                      </button>
+                      <button
                         onClick={() => handleApproveKyc(kyc.id)}
                         className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center space-x-1 shadow-xs"
                       >
@@ -412,6 +434,21 @@ export const AdminPanel: React.FC = () => {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {isLoadingKycDetail && <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center"><div className="bg-white rounded-xl p-6 text-sm">Loading private KYC documents…</div></div>}
+        {kycPreviewError && <div role="alert" className="fixed bottom-5 right-5 z-50 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl p-4 text-sm">{kycPreviewError}<button onClick={() => setKycPreviewError(null)} className="ml-3 font-bold">Close</button></div>}
+        {selectedKyc && (
+          <div className="fixed inset-0 z-50 overflow-y-auto bg-black/70 flex items-center justify-center p-4">
+            <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl p-5 space-y-4">
+              <div className="flex items-center justify-between"><div><h3 className="text-lg font-bold text-slate-900">Private KYC document review</h3><p className="text-xs text-slate-500">{selectedKyc.user?.full_name} · {selectedKyc.doc_type}</p></div><button onClick={() => setSelectedKyc(null)} className="text-sm font-bold text-slate-600">Close</button></div>
+              <p className="text-xs text-amber-700 bg-amber-50 rounded-lg p-3">Temporary secure links expire after 60 seconds. Close this preview when finished. Do not download or share documents.</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div><p className="text-xs font-bold mb-2">Identity document</p>{selectedKyc.document_signed_url?.toLowerCase().includes('.pdf') ? <iframe title="KYC identity document" src={selectedKyc.document_signed_url} className="w-full h-[520px] border rounded-lg" /> : <img src={selectedKyc.document_signed_url} alt="KYC identity document" className="w-full max-h-[520px] object-contain bg-slate-100 rounded-lg" />}</div>
+                <div><p className="text-xs font-bold mb-2">Selfie</p><img src={selectedKyc.selfie_signed_url} alt="KYC selfie" className="w-full max-h-[520px] object-contain bg-slate-100 rounded-lg" /></div>
+              </div>
+            </div>
           </div>
         )}
 
