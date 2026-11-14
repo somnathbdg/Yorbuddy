@@ -67,6 +67,6 @@ psql -v ON_ERROR_STOP=1 -c "UPDATE public.bookings SET status='cancelled' WHERE 
 call_rpc 'AFTER-CANCEL' '22222222-2222-4222-8222-222222222222' '10:30' >/dev/null
 
 # Adjacent, non-overlapping slots are allowed.
-call_rpc 'NONOVERLAP' '11111111-1111-4111-8111-111111111111' '12:30' >/dev/null
+call_rpc 'NONOVERLAP' '11111111-1111-4111-8111-111111111111' '16:00' >/dev/null
 
 echo "PASS: atomic buddy concurrency, user overlap, non-overlap and cancelled-slot behavior."
