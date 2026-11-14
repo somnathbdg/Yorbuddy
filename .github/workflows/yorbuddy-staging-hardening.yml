@@ -1,0 +1,62 @@
+name: YorBuddy staging hardening PostgreSQL tests
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/020_booking_payment_duplicate_guard.sql'
+      - 'supabase/migrations/021_atomic_booking_slot_concurrency.sql'
+      - 'server/test/**'
+      - 'server/src/services/bookingService.ts'
+      - '.github/workflows/yorbuddy-staging-hardening.yml'
+
+jobs:
+  postgres-integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: yorbuddy_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d yorbuddy_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Prepare booking fixture and apply atomic migration
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d yorbuddy_test -v ON_ERROR_STOP=1 -f server/test/fixtures/atomic-booking-setup.sql
+          psql -h localhost -U postgres -d yorbuddy_test -v ON_ERROR_STOP=1 -f supabase/migrations/021_atomic_booking_slot_concurrency.sql
+      - name: Run independent-session booking concurrency tests
+        env:
+          PGPASSWORD: postgres
+          PGHOST: localhost
+          PGUSER: postgres
+          PGDATABASE: yorbuddy_test
+        run: bash server/test/concurrent-booking-creation.sh
+      - name: Reset database and prepare payment fixture
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d yorbuddy_test -v ON_ERROR_STOP=1 -f server/test/fixtures/payment-hardening-setup.sql
+          psql -h localhost -U postgres -d yorbuddy_test -v ON_ERROR_STOP=1 -f supabase/migrations/020_booking_payment_duplicate_guard.sql
+      - name: Run payment success, duplicate callback and permission assertions
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d yorbuddy_test -v ON_ERROR_STOP=1 -f server/test/payment-hardening.integration.sql
+      - name: Run concurrent duplicate payment callback test
+        env:
+          PGPASSWORD: postgres
+          PGHOST: localhost
+          PGUSER: postgres
+          PGDATABASE: yorbuddy_test
+        run: bash server/test/concurrent-payment-confirmation.sh
