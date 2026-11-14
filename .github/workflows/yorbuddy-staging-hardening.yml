@@ -8,6 +8,15 @@ on:
       - 'server/test/**'
       - 'server/src/services/bookingService.ts'
       - '.github/workflows/yorbuddy-staging-hardening.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/020_booking_payment_duplicate_guard.sql'
+      - 'supabase/migrations/021_atomic_booking_slot_concurrency.sql'
+      - 'server/test/**'
+      - 'server/src/services/bookingService.ts'
+      - '.github/workflows/yorbuddy-staging-hardening.yml'
+  workflow_dispatch:
 
 jobs:
   postgres-integration:
