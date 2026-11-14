@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { BadRequest, NotFound, Forbidden } from '../middleware/errorHandler.js';
 import crypto from 'crypto';
 import { normalizeIndianPhone } from '../utils/phone.js';
+import { emailService } from './emailServiceFacade.js';
 
 // ========== Types ==========
 
@@ -160,6 +161,38 @@ async function getUserVerificationStatus(supabase: any, userId: string): Promise
   };
 }
 
+
+async function sendPhoneVerificationSms(phone: string, code: string): Promise<boolean> {
+  const authKey = process.env.MSG91_AUTH_KEY;
+  const templateId = process.env.MSG91_TEMPLATE_ID;
+  if (!authKey || !templateId) {
+    console.error('[VERIFICATION:SMS] MSG91 configuration is incomplete.');
+    return false;
+  }
+  try {
+    const params = new URLSearchParams({
+      template_id: templateId,
+      mobile: `91${phone}`,
+      otp: code,
+      otp_length: '6',
+      otp_expiry: '10',
+    });
+    const response = await fetch(`https://control.msg91.com/api/v5/otp?${params.toString()}`, {
+      method: 'POST',
+      headers: { authkey: authKey, 'Content-Type': 'application/json' },
+    });
+    const payload: any = await response.json().catch(() => ({}));
+    return response.ok && (payload.type === 'success' || payload.type === 'SUCCESS' || Boolean(payload.request_id));
+  } catch (error: any) {
+    console.error('[VERIFICATION:SMS] MSG91 request failed:', error?.message || 'Unknown error');
+    return false;
+  }
+}
+
+async function invalidatePendingCode(supabase: any, key: string): Promise<void> {
+  await supabase.from('verification_codes').update({ used_at: new Date().toISOString() }).eq('key', key).is('used_at', null);
+}
+
 // ========== Email Verification ==========
 
 export async function requestEmailCode(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -183,18 +216,15 @@ export async function requestEmailCode(req: Request, res: Response, next: NextFu
     }
 
     const code = generateCode();
-    await storeCode(supabase, `email:${userId}`, code);
-
-    // In production: send email via provider (SendGrid, AWS SES, etc.)
-    // For development: log to console for testing convenience.
-    // The verification code is NEVER returned in the API response.
-    if (process.env.NODE_ENV !== 'production') {
-      console.log(`[DEV] Email verification code for ${user.email}: ${code}`);
+    const key = `email:${userId}`;
+    await storeCode(supabase, key, code);
+    const delivery = await emailService.sendVerificationEmail(user.email, code, 'email');
+    if (!delivery.success) {
+      await invalidatePendingCode(supabase, key);
+      res.status(502).json({ message: 'Email delivery failed. Please try again later.' });
+      return;
     }
-
-    res.status(200).json({
-      message: 'Verification code sent to email.',
-    });
+    res.status(200).json({ message: 'Verification email accepted by the email provider.' });
   } catch (err) {
     next(err);
   }
@@ -266,18 +296,15 @@ export async function requestPhoneCode(req: Request, res: Response, next: NextFu
     }
 
     const code = generateCode();
-    await storeCode(supabase, `phone:${userId}`, code);
-
-    // In production: send SMS via MSG91, Twilio, etc.
-    // For development: log to console for testing convenience.
-    // The verification code is NEVER returned in the API response.
-    if (process.env.NODE_ENV !== 'production') {
-      console.log(`[DEV] Phone verification code for ${normalizedPhone}: ${code}`);
+    const key = `phone:${userId}`;
+    await storeCode(supabase, key, code);
+    const sent = await sendPhoneVerificationSms(normalizedPhone, code);
+    if (!sent) {
+      await invalidatePendingCode(supabase, key);
+      res.status(502).json({ message: 'SMS delivery failed. Please try again later.' });
+      return;
     }
-
-    res.status(200).json({
-      message: 'Verification code sent to phone.',
-    });
+    res.status(200).json({ message: 'OTP request accepted by the SMS provider.' });
   } catch (err) {
     next(err);
   }
