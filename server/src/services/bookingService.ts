@@ -126,58 +126,6 @@ async function getBuddyProfile(supabase: any, buddyId: string) {
   };
 }
 
-async function checkOverlap(supabase: any, buddyId: string, userId: string, bookingDate: string, bookingTime: string, durationHours: number, excludeBookingId?: string): Promise<{ hasOverlap: boolean; conflictType: 'user' | 'buddy' | null }> {
-  // Get all active bookings for this buddy OR this user on this date
-  // Only pending and confirmed bookings block slots - expired/cancelled/rejected do not
-  const { data: existingBookings, error } = await supabase
-    .from('bookings')
-    .select('id, booking_time, duration_hours, status, user_id, buddy_id')
-    .eq('booking_date', bookingDate)
-    .in('status', ['pending', 'confirmed']);
-
-  if (error) {
-    throw error;
-  }
-
-  if (!existingBookings || existingBookings.length === 0) {
-    return { hasOverlap: false, conflictType: null };
-  }
-
-  // Parse time to minutes for overlap check
-  const parseTime = (timeStr: string): number => {
-    const [time, period] = timeStr.split(' ');
-    const [hours, minutes] = time.split(':').map(Number);
-    let totalMinutes = hours * 60 + (minutes || 0);
-    if (period === 'PM' && hours !== 12) totalMinutes += 12 * 60;
-    if (period === 'AM' && hours === 12) totalMinutes -= 12 * 60;
-    return totalMinutes;
-  };
-
-  const newStart = parseTime(bookingTime);
-  const newEnd = newStart + durationHours * 60;
-
-  for (const booking of existingBookings) {
-    if (excludeBookingId && booking.id === excludeBookingId) continue;
-
-    // Check overlap only for same buddy OR same user
-    const sameBuddy = booking.buddy_id === buddyId;
-    const sameUser = booking.user_id === userId;
-    if (!sameBuddy && !sameUser) continue;
-    
-    const existingStart = parseTime(booking.booking_time);
-    const existingEnd = existingStart + booking.duration_hours * 60;
-
-    // Check overlap
-    if (newStart < existingEnd && newEnd > existingStart) {
-      return { 
-        hasOverlap: true, 
-        conflictType: sameUser ? 'user' : 'buddy'
-      };
-    }
-  }
-
-  return { hasOverlap: false, conflictType: null };
-}
 
 function canCancel(status: string): boolean {
   return status === 'pending' || status === 'confirmed';
@@ -244,16 +192,6 @@ export async function createBooking(req: Request, res: Response, next: NextFunct
       throw BadRequest('Booking date cannot be in the past.');
     }
 
-    // Check for overlapping bookings
-    const overlap = await checkOverlap(supabase, input.buddy_id, userId, input.booking_date, input.booking_time, input.duration_hours);
-    if (overlap.hasOverlap) {
-      if (overlap.conflictType === 'user') {
-        throw Conflict('You already have a booking during this time. Please choose a different time slot.');
-      } else {
-        throw Conflict('This buddy is already booked for an overlapping time slot on this date.');
-      }
-    }
-
     // Calculate pricing server-side
     const hourlyRate = buddy.hourlyRate;
     const bookingAmount = hourlyRate * input.duration_hours;
@@ -266,38 +204,40 @@ export async function createBooking(req: Request, res: Response, next: NextFunct
     // Calculate expiry time
     const expiresAt = new Date(Date.now() + env.BOOKING_EXPIRY_MINUTES * 60 * 1000);
 
-    // Create booking
-    const { data: newBooking, error } = await supabase
-      .from('bookings')
-      .insert({
-        booking_code: bookingCode,
-        user_id: userId,
-        buddy_id: input.buddy_id,
-        activity_id: input.activity_id,
-        booking_date: input.booking_date,
-        booking_time: input.booking_time,
-        duration_hours: input.duration_hours,
-        hourly_rate: hourlyRate,
-        booking_amount: bookingAmount,
-        platform_fee: platformFee,
-        total_amount: totalAmount,
-        status: 'pending',
-        expires_at: expiresAt.toISOString(),
-        location_name: input.location_name,
-        location_address: input.location_address,
-        special_notes: input.special_notes || null,
-        meet_safety_acknowledged: true,
-        has_review: false,
-      })
-      .select()
-      .single();
+    // Atomic database-side slot reservation: overlap check + insert share one transaction.
+    const { data: newBooking, error } = await supabase.rpc('create_booking_atomic', {
+      p_booking_code: bookingCode,
+      p_user_id: userId,
+      p_buddy_id: input.buddy_id,
+      p_activity_id: input.activity_id,
+      p_booking_date: input.booking_date,
+      p_booking_time: input.booking_time,
+      p_duration_hours: input.duration_hours,
+      p_hourly_rate: hourlyRate,
+      p_booking_amount: bookingAmount,
+      p_platform_fee: platformFee,
+      p_total_amount: totalAmount,
+      p_expires_at: expiresAt.toISOString(),
+      p_location_name: input.location_name,
+      p_location_address: input.location_address,
+      p_special_notes: input.special_notes || null,
+    });
 
     if (error) {
+      if (error.code === '23P01') {
+        const message = error.message || '';
+        if (message.includes('user')) {
+          throw Conflict('You already have a booking during this time. Please choose a different time slot.');
+        }
+        throw Conflict('This buddy is already booked for an overlapping time slot on this date.');
+      }
       throw error;
     }
+    const bookingRecord = Array.isArray(newBooking) ? newBooking[0] : newBooking;
+    if (!bookingRecord) throw new Error('Atomic booking RPC returned no booking record.');
 
     res.status(201).json({
-      data: newBooking,
+      data: bookingRecord,
       message: 'Booking created successfully',
     });
   } catch (err) {
