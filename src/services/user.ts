@@ -81,10 +81,11 @@ export interface VerificationStatusResponse {
   is_fully_verified: boolean;
 }
 
+export type KycDocumentType = 'pan' | 'driving_license' | 'voter_id';
 export interface KycSubmission {
-  doc_type: 'aadhaar' | 'pan' | 'passport' | 'voter_id';
-  doc_front_url: string;
-  selfie_url: string;
+  doc_type: KycDocumentType;
+  document_path: string;
+  selfie_path: string;
 }
 
 export interface KycRecord {
@@ -114,8 +115,9 @@ export interface AdminKycDetail {
   id: string;
   user_id: string;
   doc_type: string;
-  doc_front_url: string;
-  selfie_url: string;
+  document_signed_url: string;
+  selfie_signed_url: string;
+  signed_url_expires_in: number;
   status: 'pending' | 'approved' | 'rejected';
   rejection_reason?: string;
   submitted_at: string;
@@ -177,6 +179,15 @@ class UserService {
   async verifyPhone(code: string): Promise<{ message: string }> {
     const response = await apiClient.post('/verification/phone/verify', { code });
     return response.data;
+  }
+
+  async uploadKycFile(file: File, kind: 'document' | 'selfie'): Promise<{ object_path: string; kind: string }> {
+    const response = await apiClient.post(`/kyc/upload/${kind}`, file, {
+      headers: { 'Content-Type': file.type },
+      transformRequest: [(data) => data],
+      timeout: 60000,
+    });
+    return response.data.data;
   }
 
   async submitKyc(payload: KycSubmission): Promise<{ data: { id: string; status: string }; message: string }> {
