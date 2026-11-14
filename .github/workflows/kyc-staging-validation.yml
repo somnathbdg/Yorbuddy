@@ -2,7 +2,7 @@ name: KYC staging validation
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, fix/booking-slot-concurrency-staging]
     paths:
       - 'src/**'
       - 'server/src/**'
@@ -10,7 +10,7 @@ on:
       - 'package.json'
       - '.github/workflows/kyc-staging-validation.yml'
   push:
-    branches: [fix/staging-kyc-upload-verification]
+    branches: [fix/staging-kyc-upload-deploy]
     paths:
       - 'src/**'
       - 'server/src/**'
