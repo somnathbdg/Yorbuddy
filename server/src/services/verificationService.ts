@@ -150,7 +150,8 @@ async function getUserVerificationStatus(supabase: any, userId: string): Promise
   const phoneStatus = user.phone_verified_at ? 'verified' : 'unverified';
 
   // Determine fully verified
-  const isFullyVerified = emailStatus === 'verified' && phoneStatus === 'verified' && kyc === 'approved';
+  // Booking eligibility requires verified email and approved KYC. Phone OTP is optional.
+  const isFullyVerified = emailStatus === 'verified' && kyc === 'approved';
 
   return {
     email: emailStatus,
