@@ -10,7 +10,7 @@ on:
       - 'package.json'
       - '.github/workflows/kyc-staging-validation.yml'
   push:
-    branches: [fix/staging-kyc-upload-deploy]
+    branches: [fix/booking-slot-concurrency-staging]
     paths:
       - 'src/**'
       - 'server/src/**'
@@ -44,4 +44,5 @@ jobs:
           node-version: 22
       - run: npm install
       - run: npm run typecheck
+      - run: npm run test:ai-friend-registration
       - run: npm run build
