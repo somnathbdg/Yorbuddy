@@ -1,0 +1,50 @@
+name: KYC staging validation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'server/src/**'
+      - 'server/package.json'
+      - 'package.json'
+      - '.github/workflows/kyc-staging-validation.yml'
+  push:
+    branches: [fix/staging-kyc-upload-verification]
+    paths:
+      - 'src/**'
+      - 'server/src/**'
+      - 'server/package.json'
+      - 'package.json'
+      - '.github/workflows/kyc-staging-validation.yml'
+
+jobs:
+  frontend:
+    name: Frontend lint and build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+
+  backend:
+    name: Backend typecheck and build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
