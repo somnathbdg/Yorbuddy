@@ -10,7 +10,9 @@ const router = Router();
  * POST /api/auth/register
  * Register a new user account.
  */
-router.post('/register', authLimiter, register);\n\nrouter.post('/ai-friend/register', authLimiter, registerAiFriend);
+router.post('/register', authLimiter, register);
+
+router.post('/ai-friend/register', authLimiter, registerAiFriend);
 
 /**
  * POST /api/auth/login
