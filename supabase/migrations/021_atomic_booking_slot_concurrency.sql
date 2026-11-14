@@ -51,11 +51,24 @@ BEGIN
       FROM public.bookings b
      WHERE b.booking_date = p_booking_date
        AND b.status IN ('pending', 'confirmed')
-       AND (b.buddy_id = p_buddy_id OR b.user_id = p_user_id)
+       AND b.buddy_id = p_buddy_id
        AND b.booking_time < p_booking_time + make_interval(hours => p_duration_hours)
        AND b.booking_time + make_interval(hours => b.duration_hours) > p_booking_time
   ) THEN
-    RAISE EXCEPTION 'Booking time overlaps an active booking'
+    RAISE EXCEPTION 'Buddy booking time overlaps an active booking'
+      USING ERRCODE = '23P01';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+      FROM public.bookings b
+     WHERE b.booking_date = p_booking_date
+       AND b.status IN ('pending', 'confirmed')
+       AND b.user_id = p_user_id
+       AND b.booking_time < p_booking_time + make_interval(hours => p_duration_hours)
+       AND b.booking_time + make_interval(hours => b.duration_hours) > p_booking_time
+  ) THEN
+    RAISE EXCEPTION 'User booking time overlaps an active booking'
       USING ERRCODE = '23P01';
   END IF;
 
