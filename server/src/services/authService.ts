@@ -4,6 +4,8 @@ import { hashPassword, verifyPassword } from '../utils/password.js';
 import { generateAccessToken, generateRefreshToken, verifyRefreshToken } from '../utils/jwt.js';
 import { Conflict, Unauthorized, BadRequest } from '../middleware/errorHandler.js';
 import { assignFreeAccess } from './membershipService.js';
+import { normalizeIndianPhone } from '../utils/phone.js';
+import { aiFriendRegistrationSchema, buildAiFriendUserInsert, compensateAiFriendRegistration, finalizeAiFriendRegistration } from './aiFriendRegistration.js';
 import { z } from 'zod';
 
 // ========== Input Validation Schemas ==========
@@ -19,6 +21,7 @@ const registerSchema = z.object({
   role: z.enum(['user']).optional(), // Only 'user' allowed via public registration
 });
 
+// Lightweight AI Friend signup: no Buddy profile or KYC fields required.
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
   password: z.string().min(1, 'Password is required'),
@@ -151,6 +154,58 @@ export async function register(req: Request, res: Response, next: NextFunction):
   } catch (err) {
     next(err);
   }
+}
+
+
+/**
+ * AI Friend-only quick registration. Email and phone remain unverified until
+ * the existing OTP endpoints succeed. Adult consent is persisted at signup.
+ */
+export async function registerAiFriend(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const input = aiFriendRegistrationSchema.parse(req.body);
+    const email = input.email.toLowerCase();
+    const normalizedPhone = input.phone ? normalizeIndianPhone(input.phone) : null;
+
+    if (await findUserByEmail(email)) throw Conflict('An account with this email already exists. Please log in.');
+
+    const supabase = getSupabase();
+    if (normalizedPhone) {
+      const { data: existingPhone, error: phoneLookupError } = await supabase
+        .from('users').select('id').eq('phone', normalizedPhone).limit(1);
+      if (phoneLookupError) throw phoneLookupError;
+      if (existingPhone && existingPhone.length > 0) throw Conflict('This mobile number is already registered. Please log in or use a different number.');
+    }
+
+    const { data: newUser, error } = await supabase.from('users').insert(buildAiFriendUserInsert({
+      email, password_hash: hashPassword(input.password), full_name: input.full_name, phone: normalizedPhone,
+    })).select().single();
+    if (error) {
+      if (error.code === '23505') throw Conflict('This email or mobile number is already registered.');
+      throw error;
+    }
+
+    const registrationResult = await finalizeAiFriendRegistration({
+      userId: newUser.id,
+      createSession: async (setTokenId) => {
+        const accessToken = generateAccessToken({ userId: newUser.id, email: newUser.email, role: newUser.role });
+        const tokens = generateRefreshToken(newUser.id);
+        setTokenId(tokens.tokenId);
+        const refreshExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+        await storeRefreshToken(newUser.id, tokens.tokenId, refreshExpires, req);
+        return { tokenId: tokens.tokenId, result: { user: sanitizeUser(newUser), accessToken, refreshToken: tokens.token } };
+      },
+      assignFreeAccess: () => assignFreeAccess(supabase, newUser.id),
+      cleanup: (tokenId) => compensateAiFriendRegistration({
+        userId: newUser.id, tokenId,
+        deleteRefreshToken: async () => await supabase.from('refresh_tokens').delete().eq('user_id', newUser.id).eq('token_hash', tokenId),
+        deleteFreeAccess: async () => await supabase.from('memberships').delete().eq('user_id', newUser.id).eq('plan_id', 'FREE_ACCESS_10D'),
+        deleteUser: async () => await supabase.from('users').delete().eq('id', newUser.id),
+      }),
+    });
+
+    res.status(201).json({ data: registrationResult, message: 'AI Friend account created. Verify your email or mobile to continue.' });
+  } catch (err) { next(err); }
 }
 
 export async function login(req: Request, res: Response, next: NextFunction): Promise<void> {
