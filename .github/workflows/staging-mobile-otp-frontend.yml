@@ -1,0 +1,28 @@
+name: Staging mobile OTP frontend validation
+
+on:
+  pull_request:
+    branches: [feature/simple-login-registration]
+    paths:
+      - 'src/**'
+      - 'package.json'
+      - '.github/workflows/staging-mobile-otp-frontend.yml'
+  push:
+    branches: [fix/staging-mobile-otp-frontend]
+    paths:
+      - 'src/**'
+      - 'package.json'
+      - '.github/workflows/staging-mobile-otp-frontend.yml'
+
+jobs:
+  frontend:
+    name: Frontend lint and build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run lint
+      - run: npm run build
