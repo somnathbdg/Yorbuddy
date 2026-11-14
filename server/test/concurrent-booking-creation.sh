@@ -50,11 +50,17 @@ user_status=$?
 set -e
 [[ $user_status -ne 0 ]] || { echo "ERROR: overlapping user booking was accepted"; exit 1; }
 
-# A non-overlapping slot for the same buddy remains available.
-call_rpc 'NONOVERLAP' '11111111-1111-4111-8111-111111111111' '12:00' >/dev/null
+# Confirmed bookings remain blocking, but cancelled bookings release the slot.
+psql -v ON_ERROR_STOP=1 -c "UPDATE public.bookings SET status='confirmed' WHERE booking_code IN ('RACE-A','RACE-B');" >/dev/null
+set +e
+call_rpc 'CONFIRMED-BLOCK' '22222222-2222-4222-8222-222222222222' '10:30' >"$tmpdir/confirmed.log" 2>&1
+confirmed_status=$?
+set -e
+[[ $confirmed_status -ne 0 ]] || { echo "ERROR: confirmed booking did not block overlap"; exit 1; }
+psql -v ON_ERROR_STOP=1 -c "UPDATE public.bookings SET status='cancelled' WHERE booking_code IN ('RACE-A','RACE-B');" >/dev/null
+call_rpc 'AFTER-CANCEL' '22222222-2222-4222-8222-222222222222' '10:30' >/dev/null
 
-# Cancelled rows do not block; active rows do.
-psql -v ON_ERROR_STOP=1 -c "UPDATE public.bookings SET status='cancelled' WHERE booking_code='NONOVERLAP';" >/dev/null
-call_rpc 'AFTER-CANCEL' '22222222-2222-4222-8222-222222222222' '12:30' >/dev/null
+# Adjacent, non-overlapping slots are allowed.
+call_rpc 'NONOVERLAP' '11111111-1111-4111-8111-111111111111' '12:30' >/dev/null
 
 echo "PASS: atomic buddy concurrency, user overlap, non-overlap and cancelled-slot behavior."
