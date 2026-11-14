@@ -28,7 +28,7 @@ export const EmailVerificationPanel: React.FC<EmailVerificationProps> = ({ onSta
   const [isVerifying, setIsVerifying] = useState(false);
   const [code, setCode] = useState('');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [codeRequested, setCodeRequested] = useState(false);
+  const [codeSent, setCodeSent] = useState(false);
 
   useEffect(() => {
     checkStatus();
@@ -48,10 +48,11 @@ export const EmailVerificationPanel: React.FC<EmailVerificationProps> = ({ onSta
   const handleSendCode = async () => {
     setIsSendingCode(true);
     setMessage(null);
+    setCodeSent(false);
     try {
       const res = await userService.requestEmailCode();
-      setCodeRequested(true);
-      setMessage({ type: 'success', text: res.message || 'Verification email sent. Enter the 6-digit code from your inbox.' });
+      setMessage({ type: 'success', text: res.message });
+      setCodeSent(true);
     } catch (err: any) {
       const apiError = err.response?.data?.error;
       setMessage({ type: 'error', text: apiError?.message || 'Failed to send code.' });
@@ -117,7 +118,7 @@ export const EmailVerificationPanel: React.FC<EmailVerificationProps> = ({ onSta
 
       {!isVerified && (
         <>
-          {!codeRequested ? (
+          {!codeSent ? (
             <button
               onClick={handleSendCode}
               disabled={isSendingCode}
@@ -133,7 +134,7 @@ export const EmailVerificationPanel: React.FC<EmailVerificationProps> = ({ onSta
           ) : (
             <div className="space-y-3">
               <div className="p-3 rounded-xl bg-blue-50 border border-blue-200">
-                <p className="text-xs text-blue-700 font-semibold mb-2">Enter the 6-digit code sent to your email:</p>
+                <p className="text-xs text-blue-700 font-semibold mb-2">Enter the 6-digit code:</p>
                 <input
                   type="text"
                   maxLength={6}
@@ -158,7 +159,7 @@ export const EmailVerificationPanel: React.FC<EmailVerificationProps> = ({ onSta
               </button>
 
               <button
-                onClick={() => { setCodeRequested(false); setCode(''); setMessage(null); }}
+                onClick={() => { setCodeSent(false); setCode(''); }}
                 className="w-full py-2 text-xs text-blue-600 hover:text-blue-700 font-medium"
               >
                 Resend Code
@@ -185,44 +186,206 @@ export const EmailVerificationPanel: React.FC<EmailVerificationProps> = ({ onSta
 };
 
 // ============================================================================
-// Optional Phone Number (SMS verification temporarily disabled)
+// Phone Verification Panel
 // ============================================================================
 
 interface PhoneVerificationProps {
   onStatusChange?: () => void;
 }
 
-export const PhoneVerificationPanel: React.FC<PhoneVerificationProps> = () => {
-  const [phone, setPhone] = useState<string | null>(null);
+export const PhoneVerificationPanel: React.FC<PhoneVerificationProps> = ({ onStatusChange }) => {
+  const [isVerified, setIsVerified] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSendingCode, setIsSendingCode] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [code, setCode] = useState('');
+  const [phone, setPhone] = useState('');
+  const [showPhoneInput, setShowPhoneInput] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [codeSent, setCodeSent] = useState(false);
 
   useEffect(() => {
-    userService.getProfile()
-      .then((profile: any) => setPhone(profile?.user?.phone || null))
-      .catch(() => setPhone(null))
-      .finally(() => setIsLoading(false));
+    checkStatus();
   }, []);
+
+  const checkStatus = async () => {
+    try {
+      const status = await userService.getVerificationStatus();
+      setIsVerified(status.phone === 'verified');
+    } catch {
+      // ignore
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSendCode = async () => {
+    if (!phone || phone.length < 10) {
+      setMessage({ type: 'error', text: 'Please enter a valid phone number (min 10 digits).' });
+      return;
+    }
+    setIsSendingCode(true);
+    setMessage(null);
+    setCodeSent(false);
+    try {
+      const res = await userService.requestPhoneCode(phone);
+      setMessage({ type: 'success', text: res.message });
+      setCodeSent(true);
+      setShowPhoneInput(false);
+    } catch (err: any) {
+      const apiError = err.response?.data?.error;
+      setMessage({ type: 'error', text: apiError?.message || 'Failed to send OTP.' });
+    } finally {
+      setIsSendingCode(false);
+    }
+  };
+
+  const handleVerify = async () => {
+    if (code.length !== 6) {
+      setMessage({ type: 'error', text: 'Please enter a 6-digit code.' });
+      return;
+    }
+    setIsVerifying(true);
+    setMessage(null);
+    try {
+      await userService.verifyPhone(code);
+      setIsVerified(true);
+      setMessage({ type: 'success', text: 'Phone verified successfully!' });
+      onStatusChange?.();
+    } catch (err: any) {
+      const apiError = err.response?.data?.error;
+      setMessage({ type: 'error', text: apiError?.message || 'Invalid or expired code.' });
+    } finally {
+      setIsVerifying(false);
+      setCode('');
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="p-5 rounded-2xl bg-white border border-slate-200 flex items-center justify-center">
+        <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
+        <span className="ml-2 text-sm text-slate-500">Loading...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="p-5 rounded-2xl bg-white border border-slate-200 space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-slate-100">
-            <Phone className="w-5 h-5 text-slate-500" />
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isVerified ? 'bg-emerald-100' : 'bg-amber-100'}`}>
+            <Phone className={`w-5 h-5 ${isVerified ? 'text-emerald-600' : 'text-amber-600'}`} />
           </div>
           <div>
-            <h4 className="text-sm font-bold text-slate-900">Mobile Number (Optional)</h4>
-            <p className="text-xs text-slate-500">SMS verification is temporarily unavailable</p>
+            <h4 className="text-sm font-bold text-slate-900">Phone Verification</h4>
+            <p className="text-xs text-slate-500">Verify your phone number</p>
           </div>
         </div>
-        <span className="text-xs font-bold text-amber-700 bg-amber-50 px-3 py-1.5 rounded-full">
-          {isLoading ? 'Loading…' : 'Pending'}
-        </span>
+        {isVerified ? (
+          <span className="flex items-center text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-full">
+            <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+            Verified
+          </span>
+        ) : (
+          <span className="flex items-center text-xs font-bold text-amber-600 bg-amber-50 px-3 py-1.5 rounded-full">
+            <XCircle className="w-3.5 h-3.5 mr-1" />
+            Unverified
+          </span>
+        )}
       </div>
-      {phone && <p className="text-xs text-slate-600">Saved number: {phone}</p>}
-      <p className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600">
-        Adding a mobile number is optional. You can continue using email verification. Mobile OTP will be available later.
-      </p>
+
+      {!isVerified && (
+        <>
+          {showPhoneInput ? (
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-slate-600 block mb-1">Phone Number</label>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value.replace(/[^\d+]/g, '').slice(0, 15))}
+                  placeholder="+91XXXXXXXXXX"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                />
+              </div>
+              <button
+                onClick={handleSendCode}
+                disabled={isSendingCode || phone.length < 10}
+                className="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold flex items-center justify-center space-x-2 disabled:opacity-50 transition-all"
+              >
+                {isSendingCode ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Send className="w-4 h-4" />
+                )}
+                <span>{isSendingCode ? 'Sending...' : 'Send OTP'}</span>
+              </button>
+              <button
+                onClick={() => setShowPhoneInput(false)}
+                className="w-full py-2 text-xs text-slate-500 hover:text-slate-700 font-medium"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : codeSent ? (
+            <div className="space-y-3">
+              <div className="p-3 rounded-xl bg-blue-50 border border-blue-200">
+                <p className="text-xs text-blue-700 font-semibold mb-2">Enter the 6-digit OTP:</p>
+                <input
+                  type="text"
+                  maxLength={6}
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="000000"
+                  className="w-full px-4 py-3 text-center text-2xl font-mono font-bold tracking-widest bg-white border border-blue-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+
+              <button
+                onClick={handleVerify}
+                disabled={isVerifying || code.length !== 6}
+                className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold flex items-center justify-center space-x-2 disabled:opacity-50 transition-all"
+              >
+                {isVerifying ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <ShieldCheck className="w-4 h-4" />
+                )}
+                <span>{isVerifying ? 'Verifying...' : 'Verify Phone'}</span>
+              </button>
+
+              <button
+                onClick={() => { setCodeSent(false); setShowPhoneInput(true); setCode(''); }}
+                className="w-full py-2 text-xs text-blue-600 hover:text-blue-700 font-medium"
+              >
+                Resend OTP
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowPhoneInput(true)}
+              className="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold flex items-center justify-center space-x-2 transition-all"
+            >
+              <Send className="w-4 h-4" />
+              <span>Send OTP</span>
+            </button>
+          )}
+        </>
+      )}
+
+      {message && (
+        <div className={`p-3 rounded-xl flex items-start space-x-2 ${message.type === 'success' ? 'bg-emerald-50 border border-emerald-200' : 'bg-rose-50 border border-rose-200'}`}>
+          {message.type === 'success' ? (
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
+          ) : (
+            <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
+          )}
+          <p className={`text-xs font-medium ${message.type === 'success' ? 'text-emerald-700' : 'text-rose-700'}`}>
+            {message.text}
+          </p>
+        </div>
+      )}
     </div>
   );
 };
