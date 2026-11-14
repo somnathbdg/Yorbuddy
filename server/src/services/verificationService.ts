@@ -100,12 +100,17 @@ async function verifyCode(supabase: any, key: string, providedCode: string): Pro
     return false;
   }
   
-  // Mark as used (one-time use)
-  await supabase
+  // Atomically consume the code so concurrent verification requests cannot
+  // both succeed with the same one-time code.
+  const { data: consumed, error: consumeError } = await supabase
     .from('verification_codes')
     .update({ used_at: new Date().toISOString() })
-    .eq('id', record.id);
-  
+    .eq('id', record.id)
+    .is('used_at', null)
+    .select('id')
+    .maybeSingle();
+
+  if (consumeError || !consumed) return false;
   return true;
 }
 
