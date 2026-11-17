@@ -101,3 +101,20 @@ test('cleanup continues after individual deletion failures and logs them', async
   assert.match(String(logged[0][1]), /refresh cleanup failed/);
   assert.match(String(logged[0][1]), /membership cleanup threw/);
 });
+
+test('AI Friend registration rejects invalid email and weak password', () => {
+  assert.throws(() => aiFriendRegistrationSchema.parse({ ...validInput, email: 'not-an-email', adult_confirmed: true }));
+  assert.throws(() => aiFriendRegistrationSchema.parse({ ...validInput, password: 'short', adult_confirmed: true }));
+});
+
+test('AI Friend registration rejects unknown fields and oversized names', () => {
+  assert.throws(() => aiFriendRegistrationSchema.parse({ ...validInput, adult_confirmed: true, role: 'admin' }));
+  assert.throws(() => aiFriendRegistrationSchema.parse({ ...validInput, full_name: 'x'.repeat(101), adult_confirmed: true }));
+});
+
+test('empty optional phone is accepted and user insert remains role=user', () => {
+  const parsed = aiFriendRegistrationSchema.parse({ ...validInput, phone: '', adult_confirmed: true });
+  assert.equal(parsed.phone, '');
+  const row = buildAiFriendUserInsert({ email: parsed.email, password_hash: 'hash', full_name: parsed.full_name, phone: null });
+  assert.equal(row.role, 'user');
+});

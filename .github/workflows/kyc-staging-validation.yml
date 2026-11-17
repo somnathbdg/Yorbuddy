@@ -6,6 +6,8 @@ on:
     paths:
       - 'src/**'
       - 'server/src/**'
+      - 'server/test*.test.ts'
+      - 'server/test/**'
       - 'server/package.json'
       - 'package.json'
       - '.github/workflows/kyc-staging-validation.yml'
