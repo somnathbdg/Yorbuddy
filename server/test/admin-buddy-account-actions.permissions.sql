@@ -31,6 +31,15 @@ BEGIN
   IF NOT has_function_privilege('service_role', restore_oid, 'EXECUTE') THEN
     RAISE EXCEPTION 'service_role must execute restore RPC';
   END IF;
+  IF has_table_privilege('service_role', 'public.admin_buddy_account_actions', 'UPDATE')
+     OR has_table_privilege('service_role', 'public.admin_buddy_account_actions', 'DELETE')
+     OR has_table_privilege('service_role', 'public.admin_buddy_account_actions', 'TRUNCATE') THEN
+    RAISE EXCEPTION 'service_role must not mutate or truncate audit history directly';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='admin_buddy_actions_no_update_delete' AND NOT tgisinternal)
+     OR NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='admin_buddy_actions_no_truncate' AND NOT tgisinternal) THEN
+    RAISE EXCEPTION 'Append-only audit triggers are missing';
+  END IF;
 
   IF NOT EXISTS (
     SELECT 1 FROM pg_proc p
