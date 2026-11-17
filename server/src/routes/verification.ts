@@ -2,8 +2,6 @@ import express, { Router } from 'express';
 import {
   requestEmailCode,
   verifyEmail,
-  requestPhoneCode,
-  verifyPhone,
   getMyVerificationStatus,
   submitKyc,
   getMyKycStatus,
@@ -31,7 +29,7 @@ const router = Router();
 // ========== User Verification Status ==========
 
 // GET /api/verification/me
-// Returns the current user's verification status (email, phone, KYC)
+// Returns the current user's verification status (email and KYC)
 router.get('/me', authenticate, getMyVerificationStatus);
 
 // ========== Email Verification ==========
@@ -43,16 +41,6 @@ router.post('/email/request', authenticate, verificationLimiter, requestEmailCod
 // POST /api/verification/email/verify
 // Verify email with the 6-digit code
 router.post('/email/verify', authenticate, verificationLimiter, verifyEmail);
-
-// ========== Phone Verification ==========
-
-// POST /api/verification/phone/request
-// Request a verification code to be sent to user's phone
-router.post('/phone/request', authenticate, verificationLimiter, requestPhoneCode);
-
-// POST /api/verification/phone/verify
-// Verify phone with the 6-digit code
-router.post('/phone/verify', authenticate, verificationLimiter, verifyPhone);
 
 // ========== KYC (Know Your Customer) ==========
 
