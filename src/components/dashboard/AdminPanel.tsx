@@ -42,6 +42,8 @@ interface VerifiedBuddy {
   is_verified: boolean;
   safety_pledge_signed: boolean;
   verified_at: string;
+  is_active: boolean;
+  is_online: boolean;
 }
 
 export const AdminPanel: React.FC = () => {
@@ -160,6 +162,22 @@ export const AdminPanel: React.FC = () => {
       setIsLoadingVerifiedBuddies(false);
     }
   }, []);
+
+
+  const handleSuspendBuddy = async (buddy: VerifiedBuddy) => {
+    const reason = prompt(`Enter suspension reason for ${buddy.full_name} (min 10 characters):`);
+    if (reason === null) return;
+    if (reason.trim().length < 10 || reason.trim().length > 500) { alert('Suspension reason must be 10–500 characters.'); return; }
+    if (!window.confirm(`Suspend ${buddy.full_name}'s full account? Login and marketplace access will be disabled. Existing bookings and payment history will be preserved.`)) return;
+    try { await userService.suspendBuddy(buddy.user_id, reason.trim()); await fetchVerifiedBuddies(); await fetchStats(); alert('Buddy account suspended successfully.'); }
+    catch (err: any) { alert(err.response?.data?.error?.message || 'Failed to suspend Buddy account.'); }
+  };
+
+  const handleRestoreBuddy = async (buddy: VerifiedBuddy) => {
+    if (!window.confirm(`Restore ${buddy.full_name}'s account? Marketplace visibility returns only if KYC remains approved.`)) return;
+    try { await userService.restoreBuddy(buddy.user_id); await fetchVerifiedBuddies(); await fetchStats(); alert('Buddy account restored. Check KYC and marketplace status.'); }
+    catch (err: any) { alert(err.response?.data?.error?.message || 'Failed to restore Buddy account.'); }
+  };
 
   const handleVerifiedBuddiesClick = () => {
     setShowVerifiedBuddiesModal(true);
@@ -743,7 +761,7 @@ export const AdminPanel: React.FC = () => {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center space-x-2">
                             <h3 className="text-sm font-bold text-slate-900 truncate">{buddy.full_name}</h3>
-                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-emerald-100 text-emerald-700">Verified</span>
+                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${buddy.is_active ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>{buddy.is_active ? "Active" : "Suspended"}</span>
                           </div>
                           <p className="text-xs text-slate-500 truncate flex items-center mt-0.5">
                             <Mail className="w-3 h-3 mr-1" />
@@ -785,7 +803,10 @@ export const AdminPanel: React.FC = () => {
                           {/* Status Badges */}
                           <div className="flex items-center gap-2 mt-2">
                             <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-50 text-emerald-700">KYC Approved</span>
-                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-50 text-blue-700">Verified Buddy</span>
+                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${buddy.is_verified ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-600"}`}>{buddy.is_verified ? "Verified Buddy" : "Verification paused"}</span>
+                          </div>
+                          <div className="flex gap-2 mt-3">
+                            {buddy.is_active ? <button onClick={() => handleSuspendBuddy(buddy)} className="px-3 py-1.5 rounded-lg text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200">Suspend account</button> : <button onClick={() => handleRestoreBuddy(buddy)} className="px-3 py-1.5 rounded-lg text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200">Restore account</button>}
                           </div>
                         </div>
                       </div>
