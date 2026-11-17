@@ -75,7 +75,7 @@ export interface BuddyProfilePayload {
 
 export interface VerificationStatusResponse {
   email: 'unverified' | 'verified';
-  phone: 'unverified' | 'verified';
+  phone: 'not_required';
   kyc: 'not_submitted' | 'pending' | 'approved' | 'rejected';
   kyc_rejection_reason?: string;
   is_fully_verified: boolean;
@@ -168,16 +168,6 @@ class UserService {
 
   async verifyEmail(code: string): Promise<{ message: string }> {
     const response = await apiClient.post('/verification/email/verify', { code });
-    return response.data;
-  }
-
-  async requestPhoneCode(phone: string): Promise<{ message: string; dev_code?: string }> {
-    const response = await apiClient.post('/verification/phone/request', { phone });
-    return response.data;
-  }
-
-  async verifyPhone(code: string): Promise<{ message: string }> {
-    const response = await apiClient.post('/verification/phone/verify', { code });
     return response.data;
   }
 
