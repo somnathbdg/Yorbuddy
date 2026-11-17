@@ -9,7 +9,7 @@ import { verifyAccessToken } from '../utils/jwt.js';
  * Authentication & Authorization Middleware
  * ============================================================================
  *
- * authenticate()   — verifies the JWT and populates req.user from the TOKEN.
+ * authenticate()   — verifies the JWT and hydrates req.user from CURRENT DB state.
  * requireRole()    — authorization: re-reads the user row from the database and
  *                    compares the CURRENT role. The JWT role claim is never
  *                    trusted for authorization decisions.
@@ -23,9 +23,9 @@ import { verifyAccessToken } from '../utils/jwt.js';
  *   requireRole() therefore treats the claim as a hint only and re-checks the
  *   authoritative record server-side.
  *
- * authenticate() intentionally does NOT hit the database: it runs on every
- * authenticated request, and the routes that need freshness apply requireRole()
- * or requireActiveUser() on top of it.
+ * authenticate() re-reads the current user row for every authenticated request.
+ * This is deliberate: suspended/deleted accounts must be blocked immediately,
+ * even when a previously issued access JWT remains cryptographically valid.
  * ============================================================================
  */
 
@@ -58,9 +58,8 @@ async function loadCurrentUser(userId: string): Promise<CurrentUserRecord | null
  * Middleware to authenticate requests via JWT access token.
  * Attaches `req.user` when authenticated.
  *
- * NOTE: req.user.role here is the value baked into the token. Do NOT use it
- * for authorization — use requireRole()/requireAdmin(), which re-read the
- * database.
+ * req.user is populated from current DB state. Role authorization still uses
+ * requireRole()/requireAdmin() so role changes are enforced on every request.
  */
 /**
  * Resolve a signed-in user's current database record before allowing ANY
