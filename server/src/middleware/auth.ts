@@ -62,29 +62,50 @@ async function loadCurrentUser(userId: string): Promise<CurrentUserRecord | null
  * for authorization — use requireRole()/requireAdmin(), which re-read the
  * database.
  */
-export function authenticate(req: Request, _res: Response, next: NextFunction): void {
+/**
+ * Resolve a signed-in user's current database record before allowing ANY
+ * authenticated request. This closes the stale-access-token window after
+ * suspension, deletion, or role changes. Keep this check here rather than
+ * relying on each router to remember requireActiveUser().
+ */
+export async function resolveAuthenticatedUser(
+  userId: string,
+  loadUser: (id: string) => Promise<CurrentUserRecord | null>,
+): Promise<AuthUser> {
+  const current = await loadUser(userId);
+  if (!current) throw Unauthorized('Account no longer exists.');
+  if (!current.is_active) throw Forbidden('Your account has been deactivated.');
+  return {
+    id: current.id,
+    email: current.email,
+    role: current.role as AuthUser['role'],
+    full_name: current.full_name || '',
+    is_active: current.is_active,
+  } as AuthUser;
+}
+
+/**
+ * Authenticate a JWT and then re-read account status from the database.
+ * A valid but stale JWT is not sufficient for a suspended account.
+ */
+export async function authenticate(req: Request, _res: Response, next: NextFunction): Promise<void> {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return next(Unauthorized('Authentication required. Provide a Bearer token.'));
   }
 
-  const token = authHeader.slice(7); // Remove 'Bearer ' prefix
-
   try {
-    const payload = verifyAccessToken(token);
-    req.user = {
-      id: payload.userId,
-      email: payload.email,
-      role: payload.role,
-      full_name: '',
-      is_active: true,
-    } as AuthUser;
+    const payload = verifyAccessToken(authHeader.slice(7));
+    req.user = await resolveAuthenticatedUser(payload.userId, loadCurrentUser);
     next();
   } catch (err) {
     if (err instanceof Error && err.name === 'TokenExpiredError') {
       return next(Unauthorized('Access token expired. Please refresh your session.'));
     }
-    return next(Unauthorized('Invalid authentication token.'));
+    if (err instanceof Error && (err.name === 'UnauthorizedError' || err.name === 'ForbiddenError')) {
+      return next(err);
+    }
+    return next(err);
   }
 }
 
