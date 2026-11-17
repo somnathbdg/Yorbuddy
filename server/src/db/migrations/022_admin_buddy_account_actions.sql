@@ -18,11 +18,11 @@ CREATE OR REPLACE FUNCTION public.prevent_admin_buddy_action_mutation()
 RETURNS trigger
 LANGUAGE plpgsql
 SET search_path = public
-AS $
+AS $audit$
 BEGIN
   RAISE EXCEPTION 'Admin Buddy action history is append-only';
 END;
-$;
+$audit$;
 CREATE TRIGGER admin_buddy_actions_no_update_delete
   BEFORE UPDATE OR DELETE ON public.admin_buddy_account_actions
   FOR EACH ROW EXECUTE FUNCTION public.prevent_admin_buddy_action_mutation();
