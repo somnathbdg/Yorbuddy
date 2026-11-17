@@ -10,8 +10,10 @@ BEGIN
     WHERE n.nspname='public' AND c.relname='admin_buddy_account_actions' AND c.relrowsecurity
   ) THEN RAISE EXCEPTION 'RLS must be enabled on admin_buddy_account_actions'; END IF;
 
-  IF has_function_privilege('PUBLIC', suspend_oid, 'EXECUTE')
-     OR has_function_privilege('anon', suspend_oid, 'EXECUTE')
+  IF EXISTS (
+    SELECT 1 FROM pg_proc p, LATERAL aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+    WHERE p.oid=suspend_oid AND a.grantee=0 AND a.privilege_type='EXECUTE'
+  ) OR has_function_privilege('anon', suspend_oid, 'EXECUTE')
      OR has_function_privilege('authenticated', suspend_oid, 'EXECUTE') THEN
     RAISE EXCEPTION 'Untrusted roles must not execute suspend RPC';
   END IF;
@@ -19,8 +21,10 @@ BEGIN
     RAISE EXCEPTION 'service_role must execute suspend RPC';
   END IF;
 
-  IF has_function_privilege('PUBLIC', restore_oid, 'EXECUTE')
-     OR has_function_privilege('anon', restore_oid, 'EXECUTE')
+  IF EXISTS (
+    SELECT 1 FROM pg_proc p, LATERAL aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+    WHERE p.oid=restore_oid AND a.grantee=0 AND a.privilege_type='EXECUTE'
+  ) OR has_function_privilege('anon', restore_oid, 'EXECUTE')
      OR has_function_privilege('authenticated', restore_oid, 'EXECUTE') THEN
     RAISE EXCEPTION 'Untrusted roles must not execute restore RPC';
   END IF;
