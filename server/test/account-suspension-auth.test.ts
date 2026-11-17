@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveAuthenticatedUser } from './src/middleware/auth.js';
+import { resolveAuthenticatedUser } from '../src/middleware/auth.js';
 
 const activeUser = {
   id: 'buddy-1',
