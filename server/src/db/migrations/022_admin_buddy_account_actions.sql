@@ -10,6 +10,8 @@ CREATE TABLE IF NOT EXISTS public.admin_buddy_account_actions (
 CREATE INDEX IF NOT EXISTS idx_admin_buddy_actions_buddy_created
   ON public.admin_buddy_account_actions(buddy_user_id, created_at DESC);
 ALTER TABLE public.admin_buddy_account_actions ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE public.admin_buddy_account_actions FROM PUBLIC, anon, authenticated;
+GRANT ALL ON TABLE public.admin_buddy_account_actions TO service_role;
 
 CREATE OR REPLACE FUNCTION public.admin_suspend_buddy_account(
   p_actor_id UUID, p_buddy_user_id UUID, p_reason TEXT
