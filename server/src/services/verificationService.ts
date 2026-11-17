@@ -3,14 +3,13 @@ import { getSupabase } from '../config/database.js';
 import { z } from 'zod';
 import { BadRequest, NotFound, Forbidden } from '../middleware/errorHandler.js';
 import crypto from 'crypto';
-import { normalizeIndianPhone } from '../utils/phone.js';
 import { emailService } from './emailServiceFacade.js';
 
 // ========== Types ==========
 
 interface VerificationStatus {
   email: 'unverified' | 'verified';
-  phone: 'unverified' | 'verified';
+  phone: 'not_required';
   kyc: 'not_submitted' | 'pending' | 'approved' | 'rejected';
   kyc_rejection_reason?: string;
   is_fully_verified: boolean;
@@ -23,14 +22,6 @@ const requestEmailCodeSchema = z.object({
 }).strict();
 
 const verifyEmailCodeSchema = z.object({
-  code: z.string().length(6, 'Code must be exactly 6 digits').regex(/^\d{6}$/, 'Code must be numeric'),
-}).strict();
-
-const requestPhoneCodeSchema = z.object({
-  phone: z.string().min(10).max(20),
-}).strict();
-
-const verifyPhoneCodeSchema = z.object({
   code: z.string().length(6, 'Code must be exactly 6 digits').regex(/^\d{6}$/, 'Code must be numeric'),
 }).strict();
 
@@ -120,7 +111,7 @@ async function verifyCode(supabase: any, key: string, providedCode: string): Pro
 async function getUserVerificationStatus(supabase: any, userId: string): Promise<VerificationStatus> {
   const { data: user, error } = await supabase
     .from('users')
-    .select('email_verified_at, phone_verified_at')
+    .select('email_verified_at')
     .eq('id', userId)
     .single();
 
@@ -147,7 +138,7 @@ async function getUserVerificationStatus(supabase: any, userId: string): Promise
   }
 
   const emailStatus = user.email_verified_at ? 'verified' : 'unverified';
-  const phoneStatus = user.phone_verified_at ? 'verified' : 'unverified';
+  const phoneStatus: VerificationStatus['phone'] = 'not_required';
 
   // Determine fully verified
   // Booking eligibility requires verified email and approved KYC. Phone OTP is optional.
@@ -162,33 +153,6 @@ async function getUserVerificationStatus(supabase: any, userId: string): Promise
   };
 }
 
-
-async function sendPhoneVerificationSms(phone: string, code: string): Promise<boolean> {
-  const authKey = process.env.MSG91_AUTH_KEY;
-  const templateId = process.env.MSG91_TEMPLATE_ID;
-  if (!authKey || !templateId) {
-    console.error('[VERIFICATION:SMS] MSG91 configuration is incomplete.');
-    return false;
-  }
-  try {
-    const params = new URLSearchParams({
-      template_id: templateId,
-      mobile: `91${phone}`,
-      otp: code,
-      otp_length: '6',
-      otp_expiry: '10',
-    });
-    const response = await fetch(`https://control.msg91.com/api/v5/otp?${params.toString()}`, {
-      method: 'POST',
-      headers: { authkey: authKey, 'Content-Type': 'application/json' },
-    });
-    const payload: any = await response.json().catch(() => ({}));
-    return response.ok && (payload.type === 'success' || payload.type === 'SUCCESS' || Boolean(payload.request_id));
-  } catch (error: any) {
-    console.error('[VERIFICATION:SMS] MSG91 request failed:', error?.message || 'Unknown error');
-    return false;
-  }
-}
 
 async function invalidatePendingCode(supabase: any, key: string): Promise<void> {
   await supabase.from('verification_codes').update({ used_at: new Date().toISOString() }).eq('key', key).is('used_at', null);
@@ -257,86 +221,6 @@ export async function verifyEmail(req: Request, res: Response, next: NextFunctio
 
     res.status(200).json({
       message: 'Email verified successfully.',
-    });
-  } catch (err) {
-    next(err);
-  }
-}
-
-// ========== Phone Verification ==========
-
-export async function requestPhoneCode(req: Request, res: Response, next: NextFunction): Promise<void> {
-  try {
-    const input = requestPhoneCodeSchema.parse(req.body);
-    const userId = req.user!.id;
-    const supabase = getSupabase();
-    const normalizedPhone = normalizeIndianPhone(input.phone);
-
-    // Reject a number already assigned to another account before sending OTP.
-    const { data: existingPhone, error: phoneLookupError } = await supabase
-      .from('users')
-      .select('id')
-      .eq('phone', normalizedPhone)
-      .neq('id', userId)
-      .limit(1);
-
-    if (phoneLookupError) throw phoneLookupError;
-    if (existingPhone && existingPhone.length > 0) {
-      throw BadRequest('This mobile number is already registered to another account.');
-    }
-
-    // Store only the canonical 10-digit Indian mobile number.
-    const { error: updateError } = await supabase
-      .from('users')
-      .update({ phone: normalizedPhone })
-      .eq('id', userId);
-
-    if (updateError) {
-      if (updateError.code === '23505') throw BadRequest('This phone number is already in use.');
-      throw updateError;
-    }
-
-    const code = generateCode();
-    const key = `phone:${userId}`;
-    await storeCode(supabase, key, code);
-    const sent = await sendPhoneVerificationSms(normalizedPhone, code);
-    if (!sent) {
-      await invalidatePendingCode(supabase, key);
-      res.status(502).json({ message: 'SMS delivery failed. Please try again later.' });
-      return;
-    }
-    res.status(200).json({ message: 'OTP request accepted by the SMS provider.' });
-  } catch (err) {
-    next(err);
-  }
-}
-
-export async function verifyPhone(req: Request, res: Response, next: NextFunction): Promise<void> {
-  try {
-    const input = verifyPhoneCodeSchema.parse(req.body);
-    const userId = req.user!.id;
-    const supabase = getSupabase();
-
-    const isValid = await verifyCode(supabase, `phone:${userId}`, input.code);
-    if (!isValid) {
-      throw BadRequest('Invalid or expired verification code.');
-    }
-
-    const { error } = await supabase
-      .from('users')
-      .update({ phone_verified_at: new Date().toISOString() })
-      .eq('id', userId);
-
-    if (error) throw error;
-
-    // Also update profiles table for consistency
-    await supabase
-      .from('profiles')
-      .update({ is_phone_verified: true })
-      .eq('user_id', userId);
-
-    res.status(200).json({
-      message: 'Phone verified successfully.',
     });
   } catch (err) {
     next(err);
