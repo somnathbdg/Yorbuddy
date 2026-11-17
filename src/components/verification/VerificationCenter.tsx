@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { ShieldCheck, ArrowLeft } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { EmailVerificationPanel, PhoneVerificationPanel, KycSubmissionPanel } from '../dashboard/VerificationPanel';
+import { EmailVerificationPanel, KycSubmissionPanel } from '../dashboard/VerificationPanel';
 
 export const VerificationCenterView: React.FC = () => {
   const { setActiveTab, fetchVerificationStatus, verificationStatus } = useApp();
@@ -35,19 +35,12 @@ export const VerificationCenterView: React.FC = () => {
         {/* Status Overview */}
         {verificationStatus && (
           <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
-            <div className="grid grid-cols-3 gap-4 text-center">
+            <div className="grid grid-cols-2 gap-4 text-center">
               <div>
                 <span className={`inline-block w-3 h-3 rounded-full mb-1 ${verificationStatus.email === 'verified' ? 'bg-emerald-500' : 'bg-amber-400'}`} />
                 <p className="text-xs font-bold text-slate-600">Email</p>
                 <p className={`text-xs font-black ${verificationStatus.email === 'verified' ? 'text-emerald-600' : 'text-amber-600'}`}>
                   {verificationStatus.email === 'verified' ? 'Verified' : 'Pending'}
-                </p>
-              </div>
-              <div>
-                <span className={`inline-block w-3 h-3 rounded-full mb-1 ${verificationStatus.phone === 'verified' ? 'bg-emerald-500' : 'bg-amber-400'}`} />
-                <p className="text-xs font-bold text-slate-600">Phone</p>
-                <p className={`text-xs font-black ${verificationStatus.phone === 'verified' ? 'text-emerald-600' : 'text-amber-600'}`}>
-                  {verificationStatus.phone === 'verified' ? 'Verified' : 'Pending'}
                 </p>
               </div>
               <div>
@@ -62,9 +55,8 @@ export const VerificationCenterView: React.FC = () => {
         )}
 
         {/* Verification Panels */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <EmailVerificationPanel onStatusChange={fetchVerificationStatus} />
-          <PhoneVerificationPanel onStatusChange={fetchVerificationStatus} />
           <KycSubmissionPanel onStatusChange={fetchVerificationStatus} />
         </div>
       </div>
