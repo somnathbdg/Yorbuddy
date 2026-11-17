@@ -4,7 +4,7 @@ import { Forbidden } from './errorHandler.js';
 import { isUserVerified } from '../services/verificationService.js';
 
 /**
- * Middleware to require a fully verified user (email + phone + KYC approved).
+ * Middleware to require a fully verified user (email + KYC approved).
  * Must be used after `authenticate` middleware.
  * Admin users bypass this check.
  */
@@ -24,7 +24,7 @@ export async function requireVerification(req: Request, _res: Response, next: Ne
 
     if (!verified) {
       return next(
-        Forbidden('Complete verification required. Please complete your email, phone, and KYC verification to access buddy profiles.')
+        Forbidden('Complete verification required. Please complete your email and KYC verification to access buddy profiles.')
       );
     }
 
