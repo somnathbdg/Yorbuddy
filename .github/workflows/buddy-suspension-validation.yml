@@ -1,0 +1,97 @@
+name: Buddy suspension safeguards
+on:
+  pull_request:
+    branches: [feature/admin-buddy-suspend-restore]
+    paths:
+      - 'server/src/middleware/auth.ts'
+      - 'server/src/db/migrations/022_admin_buddy_account_actions.sql'
+      - 'server/src/db/migrations/022_admin_buddy_account_actions.rollback.sql'
+      - 'server/test/account-suspension-auth.test.ts'
+      - 'server/test/admin-buddy-account-actions.*'
+      - 'server/package.json'
+      - '.github/workflows/buddy-suspension-validation.yml'
+  push:
+    branches: [fix/suspension-active-user-enforcement]
+    paths:
+      - 'server/src/middleware/auth.ts'
+      - 'server/src/db/migrations/022_admin_buddy_account_actions.sql'
+      - 'server/src/db/migrations/022_admin_buddy_account_actions.rollback.sql'
+      - 'server/test/account-suspension-auth.test.ts'
+      - 'server/test/admin-buddy-account-actions.*'
+      - 'server/package.json'
+      - '.github/workflows/buddy-suspension-validation.yml'
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+        env:
+          NODE_ENV: test
+          SUPABASE_URL: https://example.supabase.co
+          SUPABASE_SERVICE_KEY: test-service-key
+          JWT_ACCESS_SECRET: test-access-secret
+          JWT_REFRESH_SECRET: test-refresh-secret
+      - run: npm run test:suspension
+        env:
+          NODE_ENV: test
+          SUPABASE_URL: https://example.supabase.co
+          SUPABASE_SERVICE_KEY: test-service-key
+          JWT_ACCESS_SECRET: test-access-secret
+          JWT_REFRESH_SECRET: test-refresh-secret
+      - run: npm run build
+        env:
+          NODE_ENV: test
+          SUPABASE_URL: https://example.supabase.co
+          SUPABASE_SERVICE_KEY: test-service-key
+          JWT_ACCESS_SECRET: test-access-secret
+          JWT_REFRESH_SECRET: test-refresh-secret
+  postgres-integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: yorbuddy_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d yorbuddy_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Create isolated test schema
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d yorbuddy_test -v ON_ERROR_STOP=1 -f server/test/fixtures/admin-buddy-actions-setup.sql
+      - name: Apply migration 022
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d yorbuddy_test -v ON_ERROR_STOP=1 -f server/src/db/migrations/022_admin_buddy_account_actions.sql
+      - name: Assert RPC permissions and RLS
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d yorbuddy_test -v ON_ERROR_STOP=1 -f server/test/admin-buddy-account-actions.permissions.sql
+      - name: Exercise suspend, restore, rejection and audit behavior
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d yorbuddy_test -v ON_ERROR_STOP=1 -f server/test/admin-buddy-account-actions.integration.sql
+      - name: Verify rollback removes migration objects
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d yorbuddy_test -v ON_ERROR_STOP=1 -f server/src/db/migrations/022_admin_buddy_account_actions.rollback.sql
+          psql -h localhost -U postgres -d yorbuddy_test -v ON_ERROR_STOP=1 -c "DO \$\$ BEGIN IF to_regclass('public.admin_buddy_account_actions') IS NOT NULL OR to_regprocedure('public.admin_suspend_buddy_account(uuid,uuid,text)') IS NOT NULL OR to_regprocedure('public.admin_restore_buddy_account(uuid,uuid)') IS NOT NULL THEN RAISE EXCEPTION 'Rollback left migration objects behind'; END IF; END \$\$;"
