@@ -6,6 +6,8 @@ import {
   rejectKyc,
   getAdminStats,
   getVerifiedBuddies,
+  suspendBuddyAccount,
+  restoreBuddyAccount,
 } from '../services/verificationService.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
 
@@ -50,6 +52,8 @@ router.get('/stats', getAdminStats);
 
 // GET /api/admin/verified-buddies
 router.get('/verified-buddies', getVerifiedBuddies);
+router.post('/buddies/:userId/suspend', suspendBuddyAccount);
+router.post('/buddies/:userId/restore', restoreBuddyAccount);
 
 // ---------- KYC review (sub-router scoped to /api/admin/kyc) ----------
 

@@ -233,6 +233,14 @@ class UserService {
     const response = await apiClient.get('/admin/verified-buddies');
     return response.data;
   }
+
+  async suspendBuddy(userId: string, reason: string): Promise<void> {
+    await apiClient.post(`/admin/buddies/${userId}/suspend`, { reason });
+  }
+
+  async restoreBuddy(userId: string): Promise<void> {
+    await apiClient.post(`/admin/buddies/${userId}/restore`);
+  }
 }
 
 export const userService = new UserService();

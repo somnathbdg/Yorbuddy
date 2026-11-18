@@ -9,7 +9,7 @@ import { verifyAccessToken } from '../utils/jwt.js';
  * Authentication & Authorization Middleware
  * ============================================================================
  *
- * authenticate()   — verifies the JWT and populates req.user from the TOKEN.
+ * authenticate()   — verifies the JWT and hydrates req.user from CURRENT DB state.
  * requireRole()    — authorization: re-reads the user row from the database and
  *                    compares the CURRENT role. The JWT role claim is never
  *                    trusted for authorization decisions.
@@ -23,9 +23,9 @@ import { verifyAccessToken } from '../utils/jwt.js';
  *   requireRole() therefore treats the claim as a hint only and re-checks the
  *   authoritative record server-side.
  *
- * authenticate() intentionally does NOT hit the database: it runs on every
- * authenticated request, and the routes that need freshness apply requireRole()
- * or requireActiveUser() on top of it.
+ * authenticate() re-reads the current user row for every authenticated request.
+ * This is deliberate: suspended/deleted accounts must be blocked immediately,
+ * even when a previously issued access JWT remains cryptographically valid.
  * ============================================================================
  */
 
@@ -58,33 +58,53 @@ async function loadCurrentUser(userId: string): Promise<CurrentUserRecord | null
  * Middleware to authenticate requests via JWT access token.
  * Attaches `req.user` when authenticated.
  *
- * NOTE: req.user.role here is the value baked into the token. Do NOT use it
- * for authorization — use requireRole()/requireAdmin(), which re-read the
- * database.
+ * req.user is populated from current DB state. Role authorization still uses
+ * requireRole()/requireAdmin() so role changes are enforced on every request.
  */
-export function authenticate(req: Request, _res: Response, next: NextFunction): void {
+/**
+ * Resolve a signed-in user's current database record before allowing ANY
+ * authenticated request. This closes the stale-access-token window after
+ * suspension, deletion, or role changes. Keep this check here rather than
+ * relying on each router to remember requireActiveUser().
+ */
+export async function resolveAuthenticatedUser(
+  userId: string,
+  loadUser: (id: string) => Promise<CurrentUserRecord | null>,
+): Promise<AuthUser> {
+  const current = await loadUser(userId);
+  if (!current) throw Unauthorized('Account no longer exists.');
+  if (!current.is_active) throw Forbidden('Your account has been deactivated.');
+  return {
+    id: current.id,
+    email: current.email,
+    role: current.role as AuthUser['role'],
+    full_name: current.full_name || '',
+    is_active: current.is_active,
+  } as AuthUser;
+}
+
+/**
+ * Authenticate a JWT and then re-read account status from the database.
+ * A valid but stale JWT is not sufficient for a suspended account.
+ */
+export async function authenticate(req: Request, _res: Response, next: NextFunction): Promise<void> {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return next(Unauthorized('Authentication required. Provide a Bearer token.'));
   }
 
-  const token = authHeader.slice(7); // Remove 'Bearer ' prefix
-
   try {
-    const payload = verifyAccessToken(token);
-    req.user = {
-      id: payload.userId,
-      email: payload.email,
-      role: payload.role,
-      full_name: '',
-      is_active: true,
-    } as AuthUser;
+    const payload = verifyAccessToken(authHeader.slice(7));
+    req.user = await resolveAuthenticatedUser(payload.userId, loadCurrentUser);
     next();
   } catch (err) {
     if (err instanceof Error && err.name === 'TokenExpiredError') {
       return next(Unauthorized('Access token expired. Please refresh your session.'));
     }
-    return next(Unauthorized('Invalid authentication token.'));
+    if (err instanceof Error && (err.name === 'UnauthorizedError' || err.name === 'ForbiddenError')) {
+      return next(err);
+    }
+    return next(err);
   }
 }
 

@@ -735,9 +735,8 @@ export async function getVerifiedBuddies(_req: Request, res: Response, next: Nex
     // Get verified buddy profiles
     const { data: buddyProfiles, error } = await supabase
       .from('buddy_profiles')
-      .select('id,user_id,hourly_rate,rating,review_count,supported_activity_ids,verification_status,is_verified,safety_pledge_signed,created_at')
+      .select('id,user_id,hourly_rate,rating,review_count,supported_activity_ids,verification_status,is_verified,is_online,safety_pledge_signed,created_at')
       .eq('verification_status', 'approved')
-      .eq('is_verified', true)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -747,7 +746,7 @@ export async function getVerifiedBuddies(_req: Request, res: Response, next: Nex
     
     const { data: users } = await supabase
       .from('users')
-      .select('id,full_name,email,role')
+      .select('id,full_name,email,role,is_active')
       .in('id', userIds);
 
     const { data: profiles } = await supabase
@@ -775,6 +774,8 @@ export async function getVerifiedBuddies(_req: Request, res: Response, next: Nex
         supported_activity_ids: bp.supported_activity_ids || [],
         verification_status: bp.verification_status,
         is_verified: bp.is_verified,
+        is_active: user?.is_active ?? false,
+        is_online: bp.is_online,
         safety_pledge_signed: bp.safety_pledge_signed,
         verified_at: bp.created_at,
       };
@@ -850,3 +851,26 @@ export async function isUserVerified(supabase: any, userId: string): Promise<boo
 }
 
 export { getUserVerificationStatus };
+
+
+export async function suspendBuddyAccount(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const targetId = String(req.params.userId || '');
+    const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(targetId)) { res.status(400).json({ error: { message: 'Invalid Buddy account ID.' } }); return; }
+    if (reason.length < 10 || reason.length > 500) { res.status(400).json({ error: { message: 'Suspension reason must be 10–500 characters.' } }); return; }
+    const { data, error } = await getSupabase().rpc('admin_suspend_buddy_account', { p_actor_id: req.user!.id, p_buddy_user_id: targetId, p_reason: reason });
+    if (error) throw error;
+    res.status(200).json({ data, message: 'Buddy account suspended successfully.' });
+  } catch (err) { next(err); }
+}
+
+export async function restoreBuddyAccount(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const targetId = String(req.params.userId || '');
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(targetId)) { res.status(400).json({ error: { message: 'Invalid Buddy account ID.' } }); return; }
+    const { data, error } = await getSupabase().rpc('admin_restore_buddy_account', { p_actor_id: req.user!.id, p_buddy_user_id: targetId });
+    if (error) throw error;
+    res.status(200).json({ data, message: 'Buddy account restored successfully. KYC approval is still required for marketplace visibility.' });
+  } catch (err) { next(err); }
+}
