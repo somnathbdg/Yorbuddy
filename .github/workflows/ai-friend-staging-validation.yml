@@ -1,0 +1,41 @@
+name: AI Friend staging validation
+
+on:
+  push:
+    branches:
+      - staging/ai-friend-rollout
+  pull_request:
+    branches:
+      - fix/booking-slot-concurrency-staging
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: Frontend lint and production build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - run: npm run lint
+      - run: npm run build
+
+  backend:
+    name: Backend typecheck, build and AI Friend tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --include=dev --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm run test:ai-friend
