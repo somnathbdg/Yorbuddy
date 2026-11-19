@@ -10,7 +10,8 @@
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "test:payment": "tsx --test test-payment-confirmation.test.ts",
-    "test:ai-friend-registration": "tsx --test test-ai-friend-registration.test.ts"
+    "test:ai-friend-registration": "tsx --test test-ai-friend-registration.test.ts",
+    "test:ai-friend": "tsx --test test-ai-friend-subscription.test.ts"
   },
   "dependencies": {
     "@sendgrid/mail": "^8.1.4",
@@ -25,7 +26,7 @@
     "node-cron": "^3.0.3",
     "puppeteer": "^25.12.0",
     "razorpay": "^2.9.8",
-    "zod": "^3.24.4"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/compression": "^1.7.5",
