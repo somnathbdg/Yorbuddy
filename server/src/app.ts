@@ -19,6 +19,7 @@ import { registerCleanupJob } from './jobs/cleanupPendingBookings.js';
 import { registerFacebookCronJob } from './jobs/facebookAutomationJob.js';
 import facebookRoutes from './routes/facebook.js';
 import { telegramWebhookRouter, telegramAdminRouter } from './routes/telegram.js';
+import aiFriendRoutes from './routes/aiFriend.js';
 
 /**
  * Create and configure the Express application.
@@ -91,6 +92,9 @@ export function createApp(): Express {
   // Kept separate from verificationRoutes so the KYC /:id route is scoped to
   // /api/admin/kyc/* and cannot shadow unrelated /api/admin/* paths.
   app.use('/api/admin', adminRoutes);
+
+  // AI Friend routes (separate verification and entitlement policy).
+  app.use('/api/ai-friend', aiFriendRoutes);
 
   // Safety report routes
   app.use('/api/reports', reportRoutes);
