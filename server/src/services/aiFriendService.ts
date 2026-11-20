@@ -2,6 +2,7 @@ import { getSupabase } from '../config/database.js';
 import { env } from '../config/env.js';
 import { Forbidden, AppError } from '../middleware/errorHandler.js';
 import { getAiFriendSubscriptionStatus } from './aiFriendSubscriptionService.js';
+import { isAiFriendUserFullyVerified } from './aiFriendEntitlement.js';
 import { getUserVerificationStatus } from './verificationService.js';
 
 export interface AiFriendMessage { role: 'user' | 'model'; text: string; }
@@ -22,9 +23,7 @@ export async function getAiFriendVerification(userId: string) {
   // AI Friend follows the account's full YorBuddy verification gate:
   // verified email + verified mobile OTP + approved KYC.
   const verification = await getUserVerificationStatus(supabase, userId);
-  const fullyVerified = verification.email === 'verified'
-    && verification.phone === 'verified'
-    && verification.kyc === 'approved';
+  const fullyVerified = isAiFriendUserFullyVerified(verification.email, verification.phone, verification.kyc);
 
   return {
     email: verification.email,
