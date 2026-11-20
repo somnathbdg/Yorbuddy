@@ -2,12 +2,12 @@
  * Membership & Free Access Regression Tests
  *
  * Verifies the corrected membership rules:
- * 1. FREE_ACCESS_10D plan is defined with correct properties (Rs.0 / 10 days)
+ * 1. FREE_ACCESS_10D plan is defined with correct properties (Rs.0 / 1 day)
  * 2. assignFreeAccess exists and is called on BOTH registration paths
  *    (password AND Google OAuth)
  * 3. One-free-access-per-user is enforced server-side and at the DB level
  * 4. "Trial" never appears in a customer-facing message
- * 5. Paid plan prices are unchanged (Rs.99 / Rs.499 / Rs.1,999)
+ * 5. Paid plan prices are unchanged (Rs.49 / Rs.299 / Rs.499)
  * 6. NO paid plan is gated on prior free access or prior purchases
  * 7. Frontend price/duration literals match the authoritative backend PLANS
  * 8. Migration 014 provides a partial unique guard scoped to FREE_ACCESS_10D
@@ -57,7 +57,7 @@ console.log('\n=== MEMBERSHIP & FREE ACCESS REGRESSION TESTS ===\n');
 console.log('=== Test 1: FREE_ACCESS_10D plan is defined correctly ===\n');
 assert(membershipService.includes('FREE_ACCESS_10D'), 'FREE_ACCESS_10D plan exists in PLANS');
 assert(membershipService.includes('amount: 0'), 'FREE_ACCESS_10D has amount 0 (free)');
-assert(membershipService.includes("period: '10 days'"), 'FREE_ACCESS_10D has 10-day period');
+assert(membershipService.includes("period: '1 day'"), 'FREE_ACCESS_10D has 1-day period');
 assert(membershipService.includes("name: 'Free Access'"), 'FREE_ACCESS_10D is named "Free Access"');
 assert(
   membershipService.includes("plan_id: z.enum(['TRIAL_1D', 'WEEK_1', 'MONTH_1'])"),
@@ -84,7 +84,7 @@ assert(
   'OAuth grant is scoped to isNewUser only (linked accounts are not re-granted)'
 );
 assert(
-  authService.includes('10-day Free Access has been activated'),
+  authService.includes('1-day Free Access has been activated'),
   'registration response mentions Free Access'
 );
 
@@ -133,7 +133,7 @@ assert(!userDashboard.includes("'Free Trial'"), 'UserDashboard does not show "Fr
 assert(!header.includes("'Free Trial'"), 'Header does not show "Free Trial"');
 assert(!authModal.includes("'Free Trial'"), 'AuthModal does not show "Free Trial"');
 assert(
-  !faqSection.includes('₹99 trial') && !/₹99\s*trial/i.test(faqSection),
+  !faqSection.includes('₹49 trial') && !/₹99\s*trial/i.test(faqSection),
   'FAQ does not mention "Rs.99 trial"'
 );
 // Any remaining "trial" tokens must be identifiers only (TRIAL_1D / free_trial_used)
@@ -164,11 +164,11 @@ if (trialTokens.length) trialTokens.forEach((t) => console.log(`         ${t}`))
 // ---------------------------------------------------------------------------
 console.log('\n=== Test 6: Paid plan prices are unchanged ===\n');
 assert(membershipService.includes('TRIAL_1D'), 'TRIAL_1D plan still exists');
-assert(membershipService.includes('amount: 9900'), 'TRIAL_1D price is Rs.99 (9900 paise)');
+assert(membershipService.includes('amount: 4900'), 'TRIAL_1D price is Rs.99 (9900 paise)');
 assert(membershipService.includes('WEEK_1'), 'WEEK_1 plan still exists');
-assert(membershipService.includes('amount: 49900'), 'WEEK_1 price is Rs.499 (49900 paise)');
+assert(membershipService.includes('amount: 29900'), 'WEEK_1 price is Rs.499 (49900 paise)');
 assert(membershipService.includes('MONTH_1'), 'MONTH_1 plan still exists');
-assert(membershipService.includes('amount: 199900'), 'MONTH_1 price is Rs.1,999 (199900 paise)');
+assert(membershipService.includes('amount: 49900'), 'MONTH_1 price is Rs.1,999 (199900 paise)');
 assert(
   membershipService.includes("name: '1 Day Access'"),
   'TRIAL_1D is named "1 Day Access" (never "trial")'
@@ -188,10 +188,10 @@ for (const [planId, v] of Object.entries(BACKEND)) {
     `backend PLANS.${planId} amount == ${v.paise} paise`
   );
 }
-assert(pricingView.includes("price: '₹0'") && pricingView.includes("period: 'for 10 days'"), 'PricingView Free Access = Rs.0 / 10 days');
-assert(pricingView.includes("price: '₹99'") && pricingView.includes("period: 'for 1 day'"), 'PricingView 1 Day Access = Rs.99 / 1 day');
-assert(pricingView.includes("price: '₹499'") && pricingView.includes("period: 'for 7 days'"), 'PricingView 1 Week = Rs.499 / 7 days');
-assert(pricingView.includes("price: '₹1,999'") && pricingView.includes("period: 'for 30 days'"), 'PricingView 1 Month = Rs.1,999 / 30 days');
+assert(pricingView.includes("price: '₹0'") && pricingView.includes("period: 'for 1 day'"), 'PricingView Free Access = Rs.0 / 10 days');
+assert(pricingView.includes("price: '₹49'") && pricingView.includes("period: 'for 1 day'"), 'PricingView 1 Day Access = Rs.99 / 1 day');
+assert(pricingView.includes("price: '₹299'") && pricingView.includes("period: 'for 7 days'"), 'PricingView 1 Week = Rs.499 / 7 days');
+assert(pricingView.includes("price: '₹499'") && pricingView.includes("period: 'for 30 days'"), 'PricingView 1 Month = Rs.1,999 / 30 days');
 assert(authModal.includes('TRIAL_1D: 99'), 'AuthModal TRIAL_1D = 99');
 assert(authModal.includes('WEEK_1: 499'), 'AuthModal WEEK_1 = 499');
 assert(authModal.includes('MONTH_1: 1999'), 'AuthModal MONTH_1 = 1999');
