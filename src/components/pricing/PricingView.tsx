@@ -261,7 +261,7 @@ export const PricingView: React.FC = () => {
               <div className="inline-flex flex-col items-center bg-gradient-to-br from-emerald-50 to-teal-50 border-2 border-emerald-200 rounded-2xl px-8 py-4 shadow-sm">
                 <span className="text-xs font-bold text-emerald-600 uppercase tracking-wider mb-1">Active Membership</span>
                 <span className="text-2xl font-black text-slate-900">
-                  {activePlanId === 'FREE_ACCESS_10D' ? 'Free Access' : activePlanId === 'WEEK_1' ? '1 Week' : activePlanId === 'MONTH_1' ? '1 Month' : activePlanId}
+                  {activePlanId === 'FREE_ACCESS_10D' ? 'Free Access' : activePlanId === 'TRIAL_1D' ? '1 Day Access' : activePlanId === 'WEEK_1' ? '1 Week' : activePlanId === 'MONTH_1' ? '1 Month' : activePlanId}
                 </span>
                 <span className="text-sm text-slate-500 mt-1">₹{apiMembership?.amount} Paid</span>
                 <span className={`text-xs font-bold mt-2 px-3 py-1 rounded-full ${
@@ -279,7 +279,7 @@ export const PricingView: React.FC = () => {
                 Choose Your Plan
               </h1>
               <p className="text-base sm:text-lg text-slate-600 leading-relaxed">
-                Start with a ₹49 1-Day Access or unlock Full Access with a Paid Membership.
+                Start with 1 day of Free Access, then choose ₹49 for 1 day, ₹299 for 1 week, or ₹499 for 1 month.
               </p>
             </>
           )}
