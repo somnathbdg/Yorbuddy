@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "test:payment": "tsx --test test-payment-confirmation.test.ts",
     "test:ai-friend-registration": "tsx --test test-ai-friend-registration.test.ts",
+    "test:membership-pricing": "node test-membership-pricing.mjs",
     "test:suspension": "tsx --test test/account-suspension-auth.test.ts"
   },
   "dependencies": {
