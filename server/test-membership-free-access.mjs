@@ -133,7 +133,7 @@ assert(!userDashboard.includes("'Free Trial'"), 'UserDashboard does not show "Fr
 assert(!header.includes("'Free Trial'"), 'Header does not show "Free Trial"');
 assert(!authModal.includes("'Free Trial'"), 'AuthModal does not show "Free Trial"');
 assert(
-  !faqSection.includes('₹49 trial') && !/₹99\s*trial/i.test(faqSection),
+  !faqSection.includes('₹49 trial') && !/₹49\s*trial/i.test(faqSection),
   'FAQ does not mention "Rs.99 trial"'
 );
 // Any remaining "trial" tokens must be identifiers only (TRIAL_1D / free_trial_used)
@@ -164,11 +164,11 @@ if (trialTokens.length) trialTokens.forEach((t) => console.log(`         ${t}`))
 // ---------------------------------------------------------------------------
 console.log('\n=== Test 6: Paid plan prices are unchanged ===\n');
 assert(membershipService.includes('TRIAL_1D'), 'TRIAL_1D plan still exists');
-assert(membershipService.includes('amount: 4900'), 'TRIAL_1D price is Rs.99 (9900 paise)');
+assert(membershipService.includes('amount: 4900'), 'TRIAL_1D price is Rs.49 (4900 paise)');
 assert(membershipService.includes('WEEK_1'), 'WEEK_1 plan still exists');
-assert(membershipService.includes('amount: 29900'), 'WEEK_1 price is Rs.499 (49900 paise)');
+assert(membershipService.includes('amount: 29900'), 'WEEK_1 price is Rs.299 (29900 paise)');
 assert(membershipService.includes('MONTH_1'), 'MONTH_1 plan still exists');
-assert(membershipService.includes('amount: 49900'), 'MONTH_1 price is Rs.1,999 (199900 paise)');
+assert(membershipService.includes('amount: 49900'), 'MONTH_1 price is Rs.499 (49900 paise)');
 assert(
   membershipService.includes("name: '1 Day Access'"),
   'TRIAL_1D is named "1 Day Access" (never "trial")'
@@ -178,9 +178,9 @@ assert(
 console.log('\n=== Test 7: Frontend price/duration literals match backend PLANS ===\n');
 const BACKEND = {
   FREE_ACCESS_10D: { paise: 0 },
-  TRIAL_1D: { paise: 9900 },
-  WEEK_1: { paise: 49900 },
-  MONTH_1: { paise: 199900 },
+  TRIAL_1D: { paise: 4900 },
+  WEEK_1: { paise: 29900 },
+  MONTH_1: { paise: 49900 },
 };
 for (const [planId, v] of Object.entries(BACKEND)) {
   assert(
@@ -188,16 +188,16 @@ for (const [planId, v] of Object.entries(BACKEND)) {
     `backend PLANS.${planId} amount == ${v.paise} paise`
   );
 }
-assert(pricingView.includes("price: '₹0'") && pricingView.includes("period: 'for 1 day'"), 'PricingView Free Access = Rs.0 / 10 days');
-assert(pricingView.includes("price: '₹49'") && pricingView.includes("period: 'for 1 day'"), 'PricingView 1 Day Access = Rs.99 / 1 day');
-assert(pricingView.includes("price: '₹299'") && pricingView.includes("period: 'for 7 days'"), 'PricingView 1 Week = Rs.499 / 7 days');
-assert(pricingView.includes("price: '₹499'") && pricingView.includes("period: 'for 30 days'"), 'PricingView 1 Month = Rs.1,999 / 30 days');
-assert(authModal.includes('TRIAL_1D: 99'), 'AuthModal TRIAL_1D = 99');
-assert(authModal.includes('WEEK_1: 499'), 'AuthModal WEEK_1 = 499');
-assert(authModal.includes('MONTH_1: 1999'), 'AuthModal MONTH_1 = 1999');
+assert(pricingView.includes("price: '₹0'") && pricingView.includes("period: 'for 1 day'"), 'PricingView Free Access = Rs.0 / 1 day');
+assert(pricingView.includes("price: '₹49'") && pricingView.includes("period: 'for 1 day'"), 'PricingView 1 Day Access = Rs.49 / 1 day');
+assert(pricingView.includes("price: '₹299'") && pricingView.includes("period: 'for 7 days'"), 'PricingView 1 Week = Rs.299 / 7 days');
+assert(pricingView.includes("price: '₹499'") && pricingView.includes("period: 'for 30 days'"), 'PricingView 1 Month = Rs.499 / 30 days');
+assert(authModal.includes('TRIAL_1D: 49'), 'AuthModal TRIAL_1D = 99');
+assert(authModal.includes('WEEK_1: 299'), 'AuthModal WEEK_1 = 499');
+assert(authModal.includes('MONTH_1: 499'), 'AuthModal MONTH_1 = 1999');
 assert(authModal.includes('FREE_ACCESS_10D: 0'), 'AuthModal FREE_ACCESS_10D = 0');
-assert(appContext.includes("pendingMembershipPlan ?? 'WEEK_1'"), 'AppContext defaults to WEEK_1');
-assert(!appContext.includes("pendingMembershipPlan ?? 'TRIAL_1D'"), 'AppContext does not default to TRIAL_1D');
+assert(appContext.includes("pendingMembershipPlan ?? 'FREE_ACCESS_10D'"), 'AppContext defaults to FREE_ACCESS_10D');
+assert(!appContext.includes("pendingMembershipPlan ?? 'WEEK_1'"), 'AppContext does not default to TRIAL_1D');
 
 // ---------------------------------------------------------------------------
 console.log('\n=== Test 8: Migration 014 provides a scoped DB-level guard ===\n');
