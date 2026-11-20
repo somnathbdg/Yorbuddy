@@ -47,7 +47,7 @@ jobs:
             for (const viewport of viewports) {
               const context = await browser.newContext({viewport:{width:viewport.width,height:viewport.height}});
               const page = await context.newPage();
-              const response = await page.goto('http://127.0.0.1:4173'+route,{waitUntil:'networkidle'});
+              const response = await page.goto('http://127.0.0.1:4173'+route,{waitUntil:'domcontentloaded'});
               const title = await page.title();
               const h1 = await page.locator('h1').count();
               const ok = !!response && response.status() === 200 && title.length > 0 && h1 > 0;
