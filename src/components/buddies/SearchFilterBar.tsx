@@ -56,6 +56,7 @@ export const SearchFilterBar: React.FC<SearchFilterBarProps> = ({
 
         {/* City Selector */}
         <select
+          aria-label="Filter buddies by city"
           value={selectedCity}
           onChange={(e) => onCityChange(e.target.value)}
           className="px-3 py-2.5 rounded-2xl bg-white/70 border border-white/80 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 shadow-inner"
@@ -82,6 +83,7 @@ export const SearchFilterBar: React.FC<SearchFilterBarProps> = ({
 
         {/* Filter Toggle */}
         <button
+          aria-label={showFilters ? 'Hide search filters' : 'Show search filters'}
           onClick={onToggleFilters}
           className={`flex items-center space-x-2 px-4 py-2.5 rounded-2xl text-sm font-bold transition-all ${
             showFilters
