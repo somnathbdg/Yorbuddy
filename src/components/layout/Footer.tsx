@@ -90,7 +90,7 @@ export const Footer: React.FC = () => {
               Need Company? Find Your Buddy.
             </p>
             <p className="text-sm text-slate-400 leading-relaxed max-w-sm">
-              Real People. Real Connections. Better Moments. a strictly platonic platform for adults to find company for coffee, movies, shopping and everyday activities.
+              Real People. Real Connections. Better Moments. A strictly platonic platform for adults to find company for coffee, movies, shopping and everyday activities.
             </p>
 
             <div className="pt-2 flex items-center space-x-3 text-slate-400 text-sm">
@@ -184,7 +184,7 @@ export const Footer: React.FC = () => {
                   href="mailto:support@yorbuddy.com"
                   className="inline-block rounded break-all text-left transition-colors hover:text-pink-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-pink-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                 >
-                  Contact: yorbuddy5@gmail.com
+                  Contact: support@yorbuddy.com
                 </a>
               </li>
             </ul>
