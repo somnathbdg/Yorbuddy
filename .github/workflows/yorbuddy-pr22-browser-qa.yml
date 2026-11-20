@@ -62,6 +62,7 @@ jobs:
           await browser.close();
           fs.writeFileSync('browser-qa-report.json',JSON.stringify(report,null,2));
           console.log(JSON.stringify({routeChecks:report.routes.length,passed:report.routes.filter(x=>x.ok).length,axeRuns:report.accessibility.length,violations:report.accessibility.reduce((n,x)=>n+x.violations.length,0)},null,2));
+          console.log('Accessibility findings:', JSON.stringify(report.accessibility.filter(x=>x.violations.length),null,2));
           if(failures) process.exit(1);
           NODE
       - name: Lighthouse mobile audit for all 12 routes
