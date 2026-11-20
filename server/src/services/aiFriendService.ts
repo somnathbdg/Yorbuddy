@@ -2,6 +2,7 @@ import { getSupabase } from '../config/database.js';
 import { env } from '../config/env.js';
 import { Forbidden, AppError } from '../middleware/errorHandler.js';
 import { getAiFriendSubscriptionStatus } from './aiFriendSubscriptionService.js';
+import { getUserVerificationStatus } from './verificationService.js';
 
 export interface AiFriendMessage { role: 'user' | 'model'; text: string; }
 
@@ -13,18 +14,24 @@ const GEMINI_TIMEOUT_MS = 20000;
 export async function getAiFriendVerification(userId: string) {
   const supabase = getSupabase();
   const { data: user, error } = await supabase.from('users')
-    .select('email_verified_at, phone_verified_at, is_active, ai_friend_adult_confirmed_at')
+    .select('is_active, ai_friend_adult_confirmed_at')
     .eq('id', userId).single();
   if (error || !user) throw new AppError('Unable to verify account status.', 503, 'VERIFICATION_UNAVAILABLE');
   if (!user.is_active) throw Forbidden('Your account is inactive.');
-  const emailVerified = !!user.email_verified_at;
-  const phoneVerified = !!user.phone_verified_at;
+
+  // AI Friend follows the account's full YorBuddy verification gate:
+  // verified email + verified mobile OTP + approved KYC.
+  const verification = await getUserVerificationStatus(supabase, userId);
+  const fullyVerified = verification.email === 'verified'
+    && verification.phone === 'verified'
+    && verification.kyc === 'approved';
+
   return {
-    email: emailVerified ? 'verified' as const : 'unverified' as const,
-    phone: phoneVerified ? 'verified' as const : 'unverified' as const,
-    kyc: 'not_required' as const,
+    email: verification.email,
+    phone: verification.phone,
+    kyc: verification.kyc,
     adult_confirmed: !!user.ai_friend_adult_confirmed_at,
-    is_fully_verified: emailVerified || phoneVerified,
+    is_fully_verified: fullyVerified,
   };
 }
 
@@ -41,7 +48,7 @@ export async function confirmAiFriendAdultStatus(userId: string) {
 
 export async function sendAiFriendMessage(userId: string, history: AiFriendMessage[], message: string): Promise<string> {
   const verification = await getAiFriendVerification(userId);
-  if (!verification.is_fully_verified) throw Forbidden('Verify either your email address or mobile number to use AI Friend.');
+  if (!verification.is_fully_verified) throw Forbidden('Verify your email, mobile number, and complete KYC approval to use AI Friend.');
   if (!verification.adult_confirmed) throw Forbidden('Please confirm that you are 18 or older to use AI Friend.');
   const entitlement = await getAiFriendSubscriptionStatus(userId);
   if (!entitlement.can_chat) throw Forbidden('Your AI Friend access is inactive or expired. Start your free trial or choose a paid plan.');
