@@ -266,8 +266,24 @@ export const AuthModal: React.FC = () => {
 
   const handleStep3Submit = (e: React.FormEvent) => {
     e.preventDefault();
-    // The 1-day Free Access is assigned automatically; optional paid plans are available — proceed to Step 4
+    // New registrations receive the included 1-day Free Access automatically.
     setRegisterStep(4);
+  };
+
+  const handleFreeAccessContinue = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setErrorText('');
+    try {
+      await fetchApiMembership();
+      setPendingMembershipPlan(null);
+      setIsRegisterModalOpen(false);
+      setActiveTab('find-buddy');
+    } catch {
+      setErrorText('Unable to confirm your free access. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
 
@@ -1192,7 +1208,7 @@ export const AuthModal: React.FC = () => {
                 const displayPlanName = planNameMap[displayPlan] ?? 'Membership';
 
                 return (
-                <form onSubmit={displayPlan === 'FREE_ACCESS_10D' ? async (e) => {\n                  e.preventDefault();\n                  setIsLoading(true);\n                  setErrorText('');\n                  try {\n                    await fetchApiMembership();\n                    setPendingMembershipPlan(null);\n                    setIsRegisterModalOpen(false);\n                    setActiveTab('find-buddy');\n                  } catch {\n                    setErrorText('Unable to confirm your free access. Please try again.');\n                  } finally {\n                    setIsLoading(false);\n                  }\n                } : handlePaymentSubmit} className="space-y-4">
+                <form onSubmit={displayPlan === 'FREE_ACCESS_10D' ? handleFreeAccessContinue : handlePaymentSubmit} className="space-y-4">
                   {/* Order summary */}
                   <div className="bg-gradient-to-br from-blue-50 via-white to-pink-50 p-5 rounded-3xl border border-pink-200/80 shadow-xs space-y-3">
                     <div className="flex items-center justify-between border-b border-slate-200 pb-3">
