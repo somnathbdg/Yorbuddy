@@ -140,7 +140,7 @@ export async function register(req: Request, res: Response, next: NextFunction):
     const refreshExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     await storeRefreshToken(newUser.id, tokenId, refreshExpires, req);
 
-    // Auto-assign 10-day free access membership
+    // Auto-assign 1-day free access membership
     await assignFreeAccess(supabase, newUser.id);
 
     res.status(201).json({
@@ -149,7 +149,7 @@ export async function register(req: Request, res: Response, next: NextFunction):
         accessToken,
         refreshToken,
       },
-      message: 'Registration successful. 10-day Free Access has been activated.',
+      message: 'Registration successful. 1-day Free Access has been activated.',
     });
   } catch (err) {
     next(err);
