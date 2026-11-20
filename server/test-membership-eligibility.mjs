@@ -9,7 +9,7 @@
  *   T1  New password user        -> exactly one FREE_ACCESS_10D grant
  *   T2  New Google OAuth user    -> exactly one FREE_ACCESS_10D grant
  *   T3  Repeat grant attempt     -> still exactly one, expiry not extended
- *   T4  User with free access    -> Rs.99 TRIAL_1D order succeeds (201)
+ *   T4  User with free access    -> Rs.49 TRIAL_1D order succeeds (201)
  *   T5  User with prior Rs.99    -> new Rs.99 order succeeds (201)
  *   T6  User with abandoned Rs.99-> new Rs.99 order succeeds (201)
  *   T7  Existing weekly member   -> MONTH_1 order succeeds (201)
@@ -169,7 +169,7 @@ async function seedMembership(userId, planId, status, expiryDays) {
     .insert({
       user_id: userId,
       plan_id: planId,
-      amount: planId === 'FREE_ACCESS_10D' ? 0 : 9900,
+      amount: planId === 'FREE_ACCESS_10D' ? 0 : 4900,
       currency: 'INR',
       status,
       membership_start_date: start.toISOString(),
@@ -232,7 +232,7 @@ async function main() {
       check(r.status === 'success', 'grant status is success', r.status);
       check(Number(r.amount) === 0, 'grant amount is 0', String(r.amount));
       const days = (new Date(r.membership_expiry_date) - new Date(r.membership_start_date)) / 864e5;
-      check(Math.abs(days - 10) < 0.01, 'window is 10 days', `${days.toFixed(3)} days`);
+      check(Math.abs(days - 10) < 0.01, 'window is 1 day', `${days.toFixed(3)} days`);
       createdMembershipIds.push(r.id);
     }
     const me = await api('GET', '/api/memberships/me', { token: u.token });
@@ -389,7 +389,7 @@ async function main() {
       body: { plan_id: 'MONTH_1' },
     });
     check(res.status === 201, 'MONTH_1 order returns 201', `status ${res.status}`);
-    check(res.body?.data?.amount === 199900, 'amount is 199900 paise', String(res.body?.data?.amount));
+    check(res.body?.data?.amount === 49900, 'amount is 199900 paise', String(res.body?.data?.amount));
     if (res.status === 201) {
       const created = (await membershipsFor(u.id)).filter((r) => r.plan_id === 'MONTH_1');
       created.forEach((r) => createdMembershipIds.push(r.id));
@@ -409,7 +409,7 @@ async function main() {
       body: { plan_id: 'WEEK_1' },
     });
     check(res.status === 201, 'WEEK_1 order returns 201', `status ${res.status}`);
-    check(res.body?.data?.amount === 49900, 'amount is 49900 paise', String(res.body?.data?.amount));
+    check(res.body?.data?.amount === 29900, 'amount is 49900 paise', String(res.body?.data?.amount));
     if (res.status === 201) {
       const created = (await membershipsFor(u.id)).filter((r) => r.plan_id === 'WEEK_1');
       created.forEach((r) => createdMembershipIds.push(r.id));
