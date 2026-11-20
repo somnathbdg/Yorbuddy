@@ -46,5 +46,7 @@ jobs:
           node-version: 22
       - run: npm install
       - run: npm run typecheck
+      - run: npm run test:membership-pricing
+      - run: npm run test:payment
       - run: npm run test:ai-friend-registration
       - run: npm run build
