@@ -22,7 +22,7 @@ function getRazorpay(): any {
 
 // ========== Pricing Plans ==========
 // FINAL PRICING (authoritative — frontend mirrors these values):
-// FREE_ACCESS_10D: ₹0 (0 paise), 1 day — auto-assigned once per account, NOT purchasable (legacy plan ID retained)
+// FREE_ACCESS_10D (legacy ID): ₹0 (0 paise), 1 day — auto-assigned once per account, NOT purchasable (legacy plan ID retained)
 // TRIAL_1D: ₹49 (4900 paise), 1 day, Razorpay required — PAID and REPEATABLE
 // WEEK_1: ₹299 (29900 paise), 7 days — PAID and REPEATABLE
 // MONTH_1: ₹499 (49900 paise), 30 days — PAID and REPEATABLE
@@ -34,7 +34,7 @@ function getRazorpay(): any {
 // but historical records are preserved.
 
 const PLANS = {
-  FREE_ACCESS_10D: { id: 'FREE_ACCESS_10D', name: 'Free Access', amount: 0, period: '10 days' },
+  FREE_ACCESS_10D: { id: 'FREE_ACCESS_10D', name: 'Free Access', amount: 0, period: '1 day' },
   TRIAL_1D: { id: 'TRIAL_1D', name: '1 Day Access', amount: 4900, period: '1 day' },
   WEEK_1: { id: 'WEEK_1', name: '1 Week', amount: 29900, period: '7 days' },
   MONTH_1: { id: 'MONTH_1', name: '1 Month', amount: 49900, period: '30 days' },
@@ -95,7 +95,7 @@ function calculateExpiry(planId: PlanId, start: Date): Date | null {
   const plan = PLANS[planId];
   if (!plan) return null;
   const d = new Date(start);
-  if (plan.period === '10 days') d.setDate(d.getDate() + 10);
+  if (plan.period === '1 day') d.setDate(d.getDate() + 1);
   else if (plan.period === '1 day') d.setDate(d.getDate() + 1);
   else if (plan.period === '7 days') d.setDate(d.getDate() + 7);
   else if (plan.period === '30 days') d.setDate(d.getDate() + 30);
