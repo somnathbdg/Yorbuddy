@@ -96,7 +96,6 @@ function calculateExpiry(planId: PlanId, start: Date): Date | null {
   if (!plan) return null;
   const d = new Date(start);
   if (plan.period === '1 day') d.setDate(d.getDate() + 1);
-  else if (plan.period === '1 day') d.setDate(d.getDate() + 1);
   else if (plan.period === '7 days') d.setDate(d.getDate() + 7);
   else if (plan.period === '30 days') d.setDate(d.getDate() + 30);
   return d;
@@ -133,7 +132,7 @@ export async function assignFreeAccess(supabase: any, userId: string): Promise<v
   // Create free access membership
   const start = new Date();
   const expiry = new Date(start);
-  expiry.setDate(expiry.getDate() + 10);
+  expiry.setDate(expiry.getDate() + 1);
 
   // Insert with a unique-violation guard.
   //
