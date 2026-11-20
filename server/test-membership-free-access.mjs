@@ -189,6 +189,8 @@ for (const [planId, v] of Object.entries(BACKEND)) {
   );
 }
 assert(pricingView.includes("price: '₹0'") && pricingView.includes("period: 'for 1 day'"), 'PricingView Free Access = Rs.0 / 1 day');
+assert(/expiry\.setDate\(expiry\.getDate\(\) \+ 1\)/.test(membershipService), 'new Free Access grant expires after exactly 1 day');
+assert(/if \(plan\.period === '1 day'\) d\.setDate\(d\.getDate\(\) \+ 1\)/.test(membershipService), '1-day paid plan expires after exactly 1 day');
 assert(pricingView.includes("price: '₹49'") && pricingView.includes("period: 'for 1 day'"), 'PricingView 1 Day Access = Rs.49 / 1 day');
 assert(pricingView.includes("price: '₹299'") && pricingView.includes("period: 'for 7 days'"), 'PricingView 1 Week = Rs.299 / 7 days');
 assert(pricingView.includes("price: '₹499'") && pricingView.includes("period: 'for 30 days'"), 'PricingView 1 Month = Rs.499 / 30 days');
