@@ -9,9 +9,9 @@
  *   T1  New password user        -> exactly one FREE_ACCESS_10D grant
  *   T2  New Google OAuth user    -> exactly one FREE_ACCESS_10D grant
  *   T3  Repeat grant attempt     -> still exactly one, expiry not extended
- *   T4  User with free access    -> Rs.99 TRIAL_1D order succeeds (201)
- *   T5  User with prior Rs.99    -> new Rs.99 order succeeds (201)
- *   T6  User with abandoned Rs.99-> new Rs.99 order succeeds (201)
+ *   T4  User with free access    -> Rs.49 TRIAL_1D order succeeds (201)
+ *   T5  User with prior Rs.49    -> new Rs.49 order succeeds (201)
+ *   T6  User with abandoned Rs.49-> new Rs.49 order succeeds (201)
  *   T7  Existing weekly member   -> MONTH_1 order succeeds (201)
  *   T8  Existing monthly member  -> WEEK_1 order succeeds (201)
  *   T9  Plan parity              -> backend amounts/prices match spec
@@ -169,7 +169,7 @@ async function seedMembership(userId, planId, status, expiryDays) {
     .insert({
       user_id: userId,
       plan_id: planId,
-      amount: planId === 'FREE_ACCESS_10D' ? 0 : 9900,
+      amount: planId === 'FREE_ACCESS_10D' ? 0 : 4900,
       currency: 'INR',
       status,
       membership_start_date: start.toISOString(),
@@ -232,7 +232,7 @@ async function main() {
       check(r.status === 'success', 'grant status is success', r.status);
       check(Number(r.amount) === 0, 'grant amount is 0', String(r.amount));
       const days = (new Date(r.membership_expiry_date) - new Date(r.membership_start_date)) / 864e5;
-      check(Math.abs(days - 10) < 0.01, 'window is 10 days', `${days.toFixed(3)} days`);
+      check(Math.abs(days - 10) < 0.01, 'window is 1 day', `${days.toFixed(3)} days`);
       createdMembershipIds.push(r.id);
     }
     const me = await api('GET', '/api/memberships/me', { token: u.token });
@@ -309,7 +309,7 @@ async function main() {
   }
 
   // -------------------------------------------------------------------------
-  console.log('\n=== T4: User WITH free access can buy Rs.99 (the reported bug) ===\n');
+  console.log('\n=== T4: User WITH free access can buy Rs.49 (the reported bug) ===\n');
   try {
     const u = await registerUser('t4');
     const rows = (await membershipsFor(u.id)).filter((r) => r.plan_id === 'FREE_ACCESS_10D');
@@ -320,8 +320,8 @@ async function main() {
       token: u.token,
       body: { plan_id: 'TRIAL_1D' },
     });
-    check(res.status === 201, 'Rs.99 order returns 201 (not 403)', `status ${res.status}`);
-    check(res.body?.data?.amount === 9900, 'amount is 9900 paise', String(res.body?.data?.amount));
+    check(res.status === 201, 'Rs.49 order returns 201 (not 403)', `status ${res.status}`);
+    check(res.body?.data?.amount === 4900, 'amount is 4900 paise', String(res.body?.data?.amount));
     // Only human-readable fields are customer-facing. plan_id is an internal
     // identifier (TRIAL_1D) and is never rendered by the frontend, which uses
     // plan_name for the Razorpay description.
@@ -336,11 +336,11 @@ async function main() {
       created.forEach((r) => createdMembershipIds.push(r.id));
     }
   } catch (e) {
-    bad('T4 free-access user buys Rs.99', '', e);
+    bad('T4 free-access user buys Rs.49', '', e);
   }
 
   // -------------------------------------------------------------------------
-  console.log('\n=== T5: User WITH a prior Rs.99 purchase can buy Rs.99 again ===\n');
+  console.log('\n=== T5: User WITH a prior Rs.49 purchase can buy Rs.49 again ===\n');
   try {
     const u = await registerUser('t5');
     await seedMembership(u.id, 'TRIAL_1D', 'success', 1);
@@ -349,18 +349,18 @@ async function main() {
       token: u.token,
       body: { plan_id: 'TRIAL_1D' },
     });
-    check(res.status === 201, 'repeat Rs.99 order returns 201', `status ${res.status}`);
-    check(res.body?.data?.amount === 9900, 'amount is 9900 paise', String(res.body?.data?.amount));
+    check(res.status === 201, 'repeat Rs.49 order returns 201', `status ${res.status}`);
+    check(res.body?.data?.amount === 4900, 'amount is 4900 paise', String(res.body?.data?.amount));
     if (res.status === 201) {
       const created = (await membershipsFor(u.id)).filter((r) => r.plan_id === 'TRIAL_1D');
       created.forEach((r) => createdMembershipIds.push(r.id));
     }
   } catch (e) {
-    bad('T5 prior Rs.99 purchase', '', e);
+    bad('T5 prior Rs.49 purchase', '', e);
   }
 
   // -------------------------------------------------------------------------
-  console.log('\n=== T6: User with an ABANDONED Rs.99 order can buy Rs.99 ===\n');
+  console.log('\n=== T6: User with an ABANDONED Rs.49 order can buy Rs.49 ===\n');
   try {
     const u = await registerUser('t6');
     await seedMembership(u.id, 'TRIAL_1D', 'created', 1); // never paid
@@ -375,7 +375,7 @@ async function main() {
       created.forEach((r) => createdMembershipIds.push(r.id));
     }
   } catch (e) {
-    bad('T6 abandoned Rs.99 order', '', e);
+    bad('T6 abandoned Rs.49 order', '', e);
   }
 
   // -------------------------------------------------------------------------
@@ -389,7 +389,7 @@ async function main() {
       body: { plan_id: 'MONTH_1' },
     });
     check(res.status === 201, 'MONTH_1 order returns 201', `status ${res.status}`);
-    check(res.body?.data?.amount === 199900, 'amount is 199900 paise', String(res.body?.data?.amount));
+    check(res.body?.data?.amount === 49900, 'amount is 49900 paise', String(res.body?.data?.amount));
     if (res.status === 201) {
       const created = (await membershipsFor(u.id)).filter((r) => r.plan_id === 'MONTH_1');
       created.forEach((r) => createdMembershipIds.push(r.id));
@@ -409,7 +409,7 @@ async function main() {
       body: { plan_id: 'WEEK_1' },
     });
     check(res.status === 201, 'WEEK_1 order returns 201', `status ${res.status}`);
-    check(res.body?.data?.amount === 49900, 'amount is 49900 paise', String(res.body?.data?.amount));
+    check(res.body?.data?.amount === 29900, 'amount is 29900 paise', String(res.body?.data?.amount));
     if (res.status === 201) {
       const created = (await membershipsFor(u.id)).filter((r) => r.plan_id === 'WEEK_1');
       created.forEach((r) => createdMembershipIds.push(r.id));
@@ -422,7 +422,7 @@ async function main() {
   console.log('\n=== T9: Plan parity — API amounts match the authoritative spec ===\n');
   try {
     const u = await registerUser('t9');
-    const expect = { TRIAL_1D: 9900, WEEK_1: 49900, MONTH_1: 199900 };
+    const expect = { TRIAL_1D: 4900, WEEK_1: 29900, MONTH_1: 49900 };
     for (const [plan, amount] of Object.entries(expect)) {
       const res = await api('POST', '/api/memberships/create-order', {
         token: u.token,

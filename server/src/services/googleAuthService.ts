@@ -445,7 +445,7 @@ export async function handleGoogleCallback(
     throw Unauthorized('Your account has been deactivated. Contact support.');
   }
 
-  // Grant 10-day Free Access to genuinely new accounts.
+  // Grant 1-day Free Access to genuinely new accounts.
   //
   // Mirrors the password-registration path (authService.register). The one
   // grant per account is enforced inside assignFreeAccess (existence check +

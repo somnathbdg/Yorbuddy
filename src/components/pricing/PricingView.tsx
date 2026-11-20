@@ -31,7 +31,7 @@ const plans: PricingPlan[] = [
     id: 'free-access-10d',
     name: 'Free Access',
     price: '₹0',
-    period: 'for 10 days',
+    period: 'for 1 day',
     badge: 'FREE',
     badgeColor: 'bg-green-100 text-green-700',
     features: [
@@ -49,7 +49,7 @@ const plans: PricingPlan[] = [
   {
     id: '1-day',
     name: '1 Day Access',
-    price: '₹99',
+    price: '₹49',
     period: 'for 1 day',
     badge: 'LIMITED ACCESS',
     badgeColor: 'bg-amber-100 text-amber-700',
@@ -58,7 +58,7 @@ const plans: PricingPlan[] = [
       'Filter by activity & city',
       'View buddy profiles',
       'Explore the platform',
-      'Payment required (₹99)',
+      'Payment required (₹49)',
     ],
     cta: 'Get 1 Day Access',
     icon: <Sparkles className="w-5 h-5" />,
@@ -68,7 +68,7 @@ const plans: PricingPlan[] = [
   {
     id: '1-week',
     name: '1 Week',
-    price: '₹499',
+    price: '₹299',
     period: 'for 7 days',
     badge: 'FULL ACCESS',
     badgeColor: 'bg-emerald-100 text-emerald-700',
@@ -87,7 +87,7 @@ const plans: PricingPlan[] = [
   {
     id: '1-month',
     name: '1 Month',
-    price: '₹1,999',
+    price: '₹499',
     period: 'for 30 days',
     badge: 'FULL ACCESS',
     badgeColor: 'bg-emerald-100 text-emerald-700',
@@ -140,7 +140,7 @@ export const PricingView: React.FC = () => {
   };
 
   const handleTrialPayment = async () => {
-    // TRIAL_1D is a PAID ₹99 plan — use the same Razorpay flow as all other plans.
+    // TRIAL_1D is a PAID ₹49 plan — use the same Razorpay flow as all other plans.
     setMembershipError(null);
     setMembershipSuccess(false);
 
@@ -261,9 +261,9 @@ export const PricingView: React.FC = () => {
               <div className="inline-flex flex-col items-center bg-gradient-to-br from-emerald-50 to-teal-50 border-2 border-emerald-200 rounded-2xl px-8 py-4 shadow-sm">
                 <span className="text-xs font-bold text-emerald-600 uppercase tracking-wider mb-1">Active Membership</span>
                 <span className="text-2xl font-black text-slate-900">
-                  {activePlanId === 'FREE_ACCESS_10D' ? 'Free Access' : activePlanId === 'WEEK_1' ? '1 Week' : activePlanId === 'MONTH_1' ? '1 Month' : activePlanId}
+                  {activePlanId === 'FREE_ACCESS_10D' ? 'Free Access' : activePlanId === 'TRIAL_1D' ? '1 Day Access' : activePlanId === 'WEEK_1' ? '1 Week' : activePlanId === 'MONTH_1' ? '1 Month' : activePlanId}
                 </span>
-                <span className="text-sm text-slate-500 mt-1">₹{apiMembership?.amount} Paid</span>
+                <span className="text-sm text-slate-500 mt-1">{apiMembership?.amount === 0 ? 'Free Access' : `₹${apiMembership?.amount} Paid`}</span>
                 <span className={`text-xs font-bold mt-2 px-3 py-1 rounded-full ${
                   apiMembership?.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
                 }`}>
@@ -279,7 +279,7 @@ export const PricingView: React.FC = () => {
                 Choose Your Plan
               </h1>
               <p className="text-base sm:text-lg text-slate-600 leading-relaxed">
-                Start with a ₹99 1-Day Access or unlock Full Access with a Paid Membership.
+                Start with 1 day of Free Access, then choose ₹49 for 1 day, ₹299 for 1 week, or ₹499 for 1 month.
               </p>
             </>
           )}
@@ -295,7 +295,7 @@ export const PricingView: React.FC = () => {
               <h3 className="text-lg font-black text-slate-900">Free Access</h3>
             </div>
             <p className="text-sm text-slate-600 leading-relaxed">
-              Get 10 days of free access with limited features. No payment required.
+              Get 1 day of free access with limited features. No payment required.
             </p>
           </div>
 
@@ -315,7 +315,7 @@ export const PricingView: React.FC = () => {
         {/* Access Notice */}
         <div className="max-w-2xl mx-auto p-4 rounded-2xl bg-blue-50 border border-blue-200 text-center">
           <p className="text-base font-bold text-blue-800">
-            <span className="text-green-600">Free Access = 10 Days</span>
+            <span className="text-green-600">Free Access = 1 Day</span>
             <span className="mx-2">|</span>
             <span className="text-emerald-600">Paid Membership = Full Access</span>
           </p>
@@ -421,7 +421,7 @@ export const PricingView: React.FC = () => {
                     disabled={processingPlanId === plan.apiPlanId}
                     className="w-full py-3.5 rounded-2xl font-black text-base shadow-lg transition-opacity flex items-center justify-center space-x-2 bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-amber-500/25 hover:opacity-95 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <span>Start 1 Day Access (₹99)</span>
+                    <span>Start 1 Day Access (₹49)</span>
                     <ArrowRight className="w-4 h-4" />
                   </button>
                 ) : (

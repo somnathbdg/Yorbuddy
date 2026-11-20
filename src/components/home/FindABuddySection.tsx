@@ -158,8 +158,9 @@ export const FindABuddySection: React.FC = () => {
           <div className="bg-white rounded-3xl p-4 sm:p-6 border border-slate-200 shadow-xs mt-4 mb-6">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div>
-                <label className="block text-sm font-bold text-slate-500 uppercase tracking-wider mb-1">Activity</label>
+                <label htmlFor="find-buddy-activity" className="block text-sm font-bold text-slate-500 uppercase tracking-wider mb-1">Activity</label>
                 <select
+                  id="find-buddy-activity"
                   value={selectedActivitySlug || ''}
                   onChange={(e) => setSelectedActivitySlug(e.target.value || null)}
                   className="w-full p-2 rounded-xl bg-slate-50 border border-slate-200 text-sm font-medium text-slate-800"
@@ -171,8 +172,9 @@ export const FindABuddySection: React.FC = () => {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-bold text-slate-500 uppercase tracking-wider mb-1">Gender</label>
+                <label htmlFor="find-buddy-gender" className="block text-sm font-bold text-slate-500 uppercase tracking-wider mb-1">Gender</label>
                 <select
+                  id="find-buddy-gender"
                   value={selectedGender}
                   onChange={(e) => setSelectedGender(e.target.value)}
                   className="w-full p-2 rounded-xl bg-slate-50 border border-slate-200 text-sm font-medium text-slate-800"

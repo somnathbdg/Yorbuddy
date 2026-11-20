@@ -266,8 +266,24 @@ export const AuthModal: React.FC = () => {
 
   const handleStep3Submit = (e: React.FormEvent) => {
     e.preventDefault();
-    // All plans (except FREE_ACCESS_10D) require payment — proceed to Step 4
+    // New registrations receive the included 1-day Free Access automatically.
     setRegisterStep(4);
+  };
+
+  const handleFreeAccessContinue = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setErrorText('');
+    try {
+      await fetchApiMembership();
+      setPendingMembershipPlan(null);
+      setIsRegisterModalOpen(false);
+      setActiveTab('find-buddy');
+    } catch {
+      setErrorText('Unable to confirm your free access. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
 
@@ -741,7 +757,7 @@ export const AuthModal: React.FC = () => {
                   <span>Membership Activated</span>
                 </div>
                 <p className="text-emerald-700 text-[11px]">
-                  No monthly recurring charges. You have unlimited access to browse verified companions across all Indian cities.
+                  Your selected access is active. Explore YorBuddy and discover companions.
                 </p>
               </div>
 
@@ -1174,12 +1190,12 @@ export const AuthModal: React.FC = () => {
 
               {/* STEP 4: Membership Payment Page */}
               {registerStep === 4 && (() => {
-                // Derive amount from pendingMembershipPlan; default to WEEK_1 ₹499
+                // Derive amount from pendingMembershipPlan; default to Free Access (₹0)
                 const planPriceMap: Record<string, number> = {
                   FREE_ACCESS_10D: 0,
-                  TRIAL_1D: 99,
-                  WEEK_1: 499,
-                  MONTH_1: 1999,
+                  TRIAL_1D: 49,
+                  WEEK_1: 299,
+                  MONTH_1: 499,
                 };
                 const planNameMap: Record<string, string> = {
                   FREE_ACCESS_10D: 'Free Access',
@@ -1187,12 +1203,12 @@ export const AuthModal: React.FC = () => {
                   WEEK_1: '1 Week',
                   MONTH_1: '1 Month',
                 };
-                const displayPlan = pendingMembershipPlan ?? 'WEEK_1';
+                const displayPlan = pendingMembershipPlan ?? 'FREE_ACCESS_10D';
                 const displayAmount = planPriceMap[displayPlan] ?? 99;
                 const displayPlanName = planNameMap[displayPlan] ?? 'Membership';
 
                 return (
-                <form onSubmit={handlePaymentSubmit} className="space-y-4">
+                <form onSubmit={displayPlan === 'FREE_ACCESS_10D' ? handleFreeAccessContinue : handlePaymentSubmit} className="space-y-4">
                   {/* Order summary */}
                   <div className="bg-gradient-to-br from-blue-50 via-white to-pink-50 p-5 rounded-3xl border border-pink-200/80 shadow-xs space-y-3">
                     <div className="flex items-center justify-between border-b border-slate-200 pb-3">
@@ -1208,7 +1224,7 @@ export const AuthModal: React.FC = () => {
                     </div>
 
                     <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 font-semibold">
-                      ⚡ Important: This membership fee provides full platform access. It is NOT monthly, weekly, or recurring.
+                      ⚡ One-time payment for the selected access period. No automatic recurring charges.
                     </div>
 
                     {/* Benefits Checklist */}
@@ -1312,7 +1328,7 @@ export const AuthModal: React.FC = () => {
                     <button
                       id="pay-membership-btn"
                       type="submit"
-                      disabled={isProcessingPayment}
+                      disabled={isProcessingPayment || isLoading}
                       className="flex-1 py-3.5 rounded-2xl bg-gradient-to-r from-blue-600 via-blue-500 to-pink-500 text-white font-black text-sm shadow-lg shadow-blue-500/25 hover:opacity-95 transition-opacity disabled:opacity-50 flex items-center justify-center space-x-2"
                     >
                       {isProcessingPayment ? (
@@ -1321,7 +1337,7 @@ export const AuthModal: React.FC = () => {
                           <span>Processing...</span>
                         </span>
                       ) : (
-                        <span>Pay & Activate Account</span>
+                        <span>{displayPlan === 'FREE_ACCESS_10D' ? 'Continue with Free Access' : 'Pay & Activate Account'}</span>
                       )}
                     </button>
                   </div>

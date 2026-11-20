@@ -90,7 +90,7 @@ export const Footer: React.FC = () => {
               Need Company? Find Your Buddy.
             </p>
             <p className="text-sm text-slate-400 leading-relaxed max-w-sm">
-              Real People. Real Connections. Better Moments. India&apos;s verified platonic friendship and companionship platform for coffee, movies, shopping, and everyday adventures.
+              Real People. Real Connections. Better Moments. A strictly platonic platform for adults to find company for coffee, movies, shopping and everyday activities.
             </p>
 
             <div className="pt-2 flex items-center space-x-3 text-slate-400 text-sm">
@@ -181,27 +181,44 @@ export const Footer: React.FC = () => {
               ))}
               <li>
                 <a
-                  href="mailto:yorbuddy5@gmail.com"
+                  href="mailto:support@yorbuddy.com"
                   className="inline-block rounded break-all text-left transition-colors hover:text-pink-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-pink-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                 >
-                  Contact: yorbuddy5@gmail.com
+                  Contact: support@yorbuddy.com
                 </a>
               </li>
             </ul>
           </div>
         </div>
 
+        {/* Crawlable public policy and city links */}
+        <nav aria-label="Legal, support and city pages" className="py-6 border-b border-slate-800 flex flex-wrap gap-x-5 gap-y-3 text-sm text-slate-400">
+          <a className={linkClass} href="/privacy">Privacy Policy</a>
+          <a className={linkClass} href="/terms">Terms of Use</a>
+          <a className={linkClass} href="/refund">Refund &amp; Cancellation</a>
+          <a className={linkClass} href="/safety">Safety Guidelines</a>
+          <a className={linkClass} href="/about">About YorBuddy</a>
+          <a className={linkClass} href="/faq">FAQ</a>
+          <a className={linkClass} href="/contact">Contact</a>
+          <a className={linkClass} href="/pune">Pune</a>
+          <a className={linkClass} href="/bengaluru">Bengaluru</a>
+          <a className={linkClass} href="/mumbai">Mumbai</a>
+          <a className={linkClass} href="/delhi-ncr">Delhi NCR</a>
+        </nav>
+
         {/* Bottom copyright and legal disclaimer */}
         <div className="pt-8 flex flex-col md:flex-row items-center justify-between text-sm text-slate-500 gap-4">
-          <p>© {new Date().getFullYear()} YorBuddy Technologies India Pvt. Ltd. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} YorBuddy All rights reserved.</p>
           <div className="flex items-center space-x-4">
             <span className="text-slate-400">Platonic Companionship Only</span>
             <span>•</span>
-            <span className="text-slate-400">18+ Verified Platform</span>
+            <span className="text-slate-400">Adults 18+ Only</span>
             <span>•</span>
             <span className="text-slate-400">Secure Payments</span>
           </div>
         </div>
+
+        <p className="mt-3 text-center text-xs text-slate-500">Legal operating entity, CIN and registered office details will be published after documentary verification.</p>
 
         {/* Admin Portal — accessible but secondary */}
         <div className="mt-8 pt-6 border-t border-slate-800 flex justify-center">
