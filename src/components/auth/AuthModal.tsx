@@ -1192,7 +1192,7 @@ export const AuthModal: React.FC = () => {
                 const displayPlanName = planNameMap[displayPlan] ?? 'Membership';
 
                 return (
-                <form onSubmit={handlePaymentSubmit} className="space-y-4">
+                <form onSubmit={displayPlan === 'FREE_ACCESS_10D' ? async (e) => {\n                  e.preventDefault();\n                  setIsLoading(true);\n                  setErrorText('');\n                  try {\n                    await fetchApiMembership();\n                    setPendingMembershipPlan(null);\n                    setIsRegisterModalOpen(false);\n                    setActiveTab('find-buddy');\n                  } catch {\n                    setErrorText('Unable to confirm your free access. Please try again.');\n                  } finally {\n                    setIsLoading(false);\n                  }\n                } : handlePaymentSubmit} className="space-y-4">
                   {/* Order summary */}
                   <div className="bg-gradient-to-br from-blue-50 via-white to-pink-50 p-5 rounded-3xl border border-pink-200/80 shadow-xs space-y-3">
                     <div className="flex items-center justify-between border-b border-slate-200 pb-3">
@@ -1312,7 +1312,7 @@ export const AuthModal: React.FC = () => {
                     <button
                       id="pay-membership-btn"
                       type="submit"
-                      disabled={isProcessingPayment}
+                      disabled={isProcessingPayment || isLoading}
                       className="flex-1 py-3.5 rounded-2xl bg-gradient-to-r from-blue-600 via-blue-500 to-pink-500 text-white font-black text-sm shadow-lg shadow-blue-500/25 hover:opacity-95 transition-opacity disabled:opacity-50 flex items-center justify-center space-x-2"
                     >
                       {isProcessingPayment ? (
@@ -1321,7 +1321,7 @@ export const AuthModal: React.FC = () => {
                           <span>Processing...</span>
                         </span>
                       ) : (
-                        <span>Continue with Free Access</span>
+                        <span>{displayPlan === 'FREE_ACCESS_10D' ? 'Continue with Free Access' : 'Pay & Activate Account'}</span>
                       )}
                     </button>
                   </div>
