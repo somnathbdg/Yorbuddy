@@ -389,7 +389,7 @@ async function main() {
       body: { plan_id: 'MONTH_1' },
     });
     check(res.status === 201, 'MONTH_1 order returns 201', `status ${res.status}`);
-    check(res.body?.data?.amount === 29900, 'amount is 29900 paise', String(res.body?.data?.amount));
+    check(res.body?.data?.amount === 49900, 'amount is 49900 paise', String(res.body?.data?.amount));
     if (res.status === 201) {
       const created = (await membershipsFor(u.id)).filter((r) => r.plan_id === 'MONTH_1');
       created.forEach((r) => createdMembershipIds.push(r.id));
@@ -409,7 +409,7 @@ async function main() {
       body: { plan_id: 'WEEK_1' },
     });
     check(res.status === 201, 'WEEK_1 order returns 201', `status ${res.status}`);
-    check(res.body?.data?.amount === 29900, 'amount is 49900 paise', String(res.body?.data?.amount));
+    check(res.body?.data?.amount === 29900, 'amount is 29900 paise', String(res.body?.data?.amount));
     if (res.status === 201) {
       const created = (await membershipsFor(u.id)).filter((r) => r.plan_id === 'WEEK_1');
       created.forEach((r) => createdMembershipIds.push(r.id));
