@@ -741,7 +741,7 @@ export const AuthModal: React.FC = () => {
                   <span>Membership Activated</span>
                 </div>
                 <p className="text-emerald-700 text-[11px]">
-                  No monthly recurring charges. You have unlimited access to browse verified companions across all Indian cities.
+                  Your selected access is active. Explore YorBuddy and discover companions.
                 </p>
               </div>
 
@@ -1174,7 +1174,7 @@ export const AuthModal: React.FC = () => {
 
               {/* STEP 4: Membership Payment Page */}
               {registerStep === 4 && (() => {
-                // Derive amount from pendingMembershipPlan; default to WEEK_1 ₹499
+                // Derive amount from pendingMembershipPlan; default to Free Access (₹0)
                 const planPriceMap: Record<string, number> = {
                   FREE_ACCESS_10D: 0,
                   TRIAL_1D: 49,
@@ -1187,7 +1187,7 @@ export const AuthModal: React.FC = () => {
                   WEEK_1: '1 Week',
                   MONTH_1: '1 Month',
                 };
-                const displayPlan = pendingMembershipPlan ?? 'WEEK_1';
+                const displayPlan = pendingMembershipPlan ?? 'FREE_ACCESS_10D';
                 const displayAmount = planPriceMap[displayPlan] ?? 99;
                 const displayPlanName = planNameMap[displayPlan] ?? 'Membership';
 
@@ -1208,7 +1208,7 @@ export const AuthModal: React.FC = () => {
                     </div>
 
                     <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 font-semibold">
-                      ⚡ Important: This membership fee provides full platform access. It is NOT monthly, weekly, or recurring.
+                      ⚡ One-time payment for the selected access period. No automatic recurring charges.
                     </div>
 
                     {/* Benefits Checklist */}
@@ -1321,7 +1321,7 @@ export const AuthModal: React.FC = () => {
                           <span>Processing...</span>
                         </span>
                       ) : (
-                        <span>Pay & Activate Account</span>
+                        <span>Continue with Free Access</span>
                       )}
                     </button>
                   </div>
