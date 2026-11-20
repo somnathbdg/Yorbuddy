@@ -68,7 +68,7 @@ const plans: PricingPlan[] = [
   {
     id: '1-week',
     name: '1 Week',
-    price: '₹499',
+    price: '₹299',
     period: 'for 7 days',
     badge: 'FULL ACCESS',
     badgeColor: 'bg-emerald-100 text-emerald-700',
@@ -87,7 +87,7 @@ const plans: PricingPlan[] = [
   {
     id: '1-month',
     name: '1 Month',
-    price: '₹1,999',
+    price: '₹499',
     period: 'for 30 days',
     badge: 'FULL ACCESS',
     badgeColor: 'bg-emerald-100 text-emerald-700',
@@ -140,7 +140,7 @@ export const PricingView: React.FC = () => {
   };
 
   const handleTrialPayment = async () => {
-    // TRIAL_1D is a PAID ₹99 plan — use the same Razorpay flow as all other plans.
+    // TRIAL_1D is a PAID ₹49 plan — use the same Razorpay flow as all other plans.
     setMembershipError(null);
     setMembershipSuccess(false);
 
