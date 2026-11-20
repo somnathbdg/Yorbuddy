@@ -134,7 +134,7 @@ assert(!header.includes("'Free Trial'"), 'Header does not show "Free Trial"');
 assert(!authModal.includes("'Free Trial'"), 'AuthModal does not show "Free Trial"');
 assert(
   !faqSection.includes('₹49 trial') && !/₹49\s*trial/i.test(faqSection),
-  'FAQ does not mention "Rs.99 trial"'
+  'FAQ does not mention "Rs.49 trial"'
 );
 // Any remaining "trial" tokens must be identifiers only (TRIAL_1D / free_trial_used)
 const trialTokens = [];
@@ -196,8 +196,10 @@ assert(authModal.includes('TRIAL_1D: 49'), 'AuthModal TRIAL_1D = 99');
 assert(authModal.includes('WEEK_1: 299'), 'AuthModal WEEK_1 = 499');
 assert(authModal.includes('MONTH_1: 499'), 'AuthModal MONTH_1 = 1999');
 assert(authModal.includes('FREE_ACCESS_10D: 0'), 'AuthModal FREE_ACCESS_10D = 0');
+assert(authModal.includes("pendingMembershipPlan ?? 'FREE_ACCESS_10D'"), 'new registration defaults to included Free Access');
+assert(authModal.includes('handleFreeAccessContinue'), 'free registration continues without payment checkout');
 assert(appContext.includes("pendingMembershipPlan ?? 'FREE_ACCESS_10D'"), 'AppContext defaults to FREE_ACCESS_10D');
-assert(!appContext.includes("pendingMembershipPlan ?? 'WEEK_1'"), 'AppContext does not default to TRIAL_1D');
+assert(!appContext.includes("pendingMembershipPlan ?? 'WEEK_1'"), 'AppContext does not default to WEEK_1');
 
 // ---------------------------------------------------------------------------
 console.log('\n=== Test 8: Migration 014 provides a scoped DB-level guard ===\n');
