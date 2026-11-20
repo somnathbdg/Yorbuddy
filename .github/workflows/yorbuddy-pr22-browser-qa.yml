@@ -54,7 +54,7 @@ jobs:
               report.routes.push({route,viewport:viewport.name,status:response?.status() ?? null,title,h1,ok});
               if (!ok) failures++;
               const axe = await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21a','wcag21aa']).analyze();
-              report.accessibility.push({route,viewport:viewport.name,violations:axe.violations.map(v=>({id:v.id,impact:v.impact,description:v.description,nodes:v.nodes.length}))});
+              report.accessibility.push({route,viewport:viewport.name,violations:axe.violations.map(v=>({id:v.id,impact:v.impact,description:v.description,nodes:v.nodes.map(n=>({target:n.target,html:n.html,failureSummary:n.failureSummary}))}))});
               if (axe.violations.length) failures++;
               await context.close();
             }
