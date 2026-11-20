@@ -10,6 +10,7 @@ import {
   normalizeVerifiedPhone,
   verifyAiFriendPaymentSignature,
   isPaidYorBuddyMembershipActive,
+  isAiFriendUserFullyVerified,
 } from './src/services/aiFriendEntitlement.js';
 
 test('AI Friend pricing uses exact INR amounts and durations', () => {
@@ -75,4 +76,13 @@ test('active paid YorBuddy membership includes AI Friend at no extra charge', ()
   assert.equal(isPaidYorBuddyMembershipActive('WEEK_1', 'success', '2026-11-01T09:59:59.000Z', now), false);
   assert.equal(isPaidYorBuddyMembershipActive('WEEK_1', 'created', '2026-11-02T10:00:00.000Z', now), false);
   assert.equal(isPaidYorBuddyMembershipActive('FREE_ACCESS_10D', 'success', '2026-11-02T10:00:00.000Z', now), false);
+});
+
+test('AI Friend requires verified email, verified mobile OTP, and approved KYC', () => {
+  assert.equal(isAiFriendUserFullyVerified('verified', 'verified', 'approved'), true);
+  assert.equal(isAiFriendUserFullyVerified('unverified', 'verified', 'approved'), false);
+  assert.equal(isAiFriendUserFullyVerified('verified', 'unverified', 'approved'), false);
+  assert.equal(isAiFriendUserFullyVerified('verified', 'verified', 'pending'), false);
+  assert.equal(isAiFriendUserFullyVerified('verified', 'verified', 'rejected'), false);
+  assert.equal(isAiFriendUserFullyVerified('verified', 'verified', 'not_submitted'), false);
 });
