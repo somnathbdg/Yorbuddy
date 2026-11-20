@@ -22,10 +22,10 @@ function getRazorpay(): any {
 
 // ========== Pricing Plans ==========
 // FINAL PRICING (authoritative — frontend mirrors these values):
-// FREE_ACCESS_10D: ₹0 (0 paise), 10 days — auto-assigned once per account, NOT purchasable
-// TRIAL_1D: ₹99 (9900 paise), 1 day, Razorpay required — PAID and REPEATABLE
-// WEEK_1: ₹499 (49900 paise), 7 days — PAID and REPEATABLE
-// MONTH_1: ₹1999 (199900 paise), 30 days — PAID and REPEATABLE
+// FREE_ACCESS_10D (legacy ID): ₹0 (0 paise), 1 day — auto-assigned once per account, NOT purchasable (legacy plan ID retained)
+// TRIAL_1D: ₹49 (4900 paise), 1 day, Razorpay required — PAID and REPEATABLE
+// WEEK_1: ₹299 (29900 paise), 7 days — PAID and REPEATABLE
+// MONTH_1: ₹499 (49900 paise), 30 days — PAID and REPEATABLE
 //
 // No paid plan is gated on prior free access or prior purchases. Every
 // purchase requires a fresh Razorpay payment.
@@ -34,10 +34,10 @@ function getRazorpay(): any {
 // but historical records are preserved.
 
 const PLANS = {
-  FREE_ACCESS_10D: { id: 'FREE_ACCESS_10D', name: 'Free Access', amount: 0, period: '10 days' },
-  TRIAL_1D: { id: 'TRIAL_1D', name: '1 Day Access', amount: 9900, period: '1 day' },
-  WEEK_1: { id: 'WEEK_1', name: '1 Week', amount: 49900, period: '7 days' },
-  MONTH_1: { id: 'MONTH_1', name: '1 Month', amount: 199900, period: '30 days' },
+  FREE_ACCESS_10D: { id: 'FREE_ACCESS_10D', name: 'Free Access', amount: 0, period: '1 day' },
+  TRIAL_1D: { id: 'TRIAL_1D', name: '1 Day Access', amount: 4900, period: '1 day' },
+  WEEK_1: { id: 'WEEK_1', name: '1 Week', amount: 29900, period: '7 days' },
+  MONTH_1: { id: 'MONTH_1', name: '1 Month', amount: 49900, period: '30 days' },
 } as const;
 
 // ========== Shared Membership Check Helper ==========
@@ -76,7 +76,7 @@ type PlanId = keyof typeof PLANS;
 // ========== Validation Schemas ==========
 
 // Only these plans can be purchased via create-order.
-// FREE_ACCESS_10D is auto-assigned on registration and cannot be purchased.
+// FREE_ACCESS_10D (legacy identifier) is auto-assigned on registration for 1 day and cannot be purchased.
 const createOrderSchema = z.object({
   plan_id: z.enum(['TRIAL_1D', 'WEEK_1', 'MONTH_1']),
 }).strict();
@@ -95,8 +95,7 @@ function calculateExpiry(planId: PlanId, start: Date): Date | null {
   const plan = PLANS[planId];
   if (!plan) return null;
   const d = new Date(start);
-  if (plan.period === '10 days') d.setDate(d.getDate() + 10);
-  else if (plan.period === '1 day') d.setDate(d.getDate() + 1);
+  if (plan.period === '1 day') d.setDate(d.getDate() + 1);
   else if (plan.period === '7 days') d.setDate(d.getDate() + 7);
   else if (plan.period === '30 days') d.setDate(d.getDate() + 30);
   return d;
@@ -105,7 +104,7 @@ function calculateExpiry(planId: PlanId, start: Date): Date | null {
 // ========== Controllers ==========
 
 /**
- * Assign 10-day Free Access to a user.
+ * Assign 1-day Free Access to a user.
  *
  * Called on registration (password and Google OAuth).
  *
@@ -133,7 +132,7 @@ export async function assignFreeAccess(supabase: any, userId: string): Promise<v
   // Create free access membership
   const start = new Date();
   const expiry = new Date(start);
-  expiry.setDate(expiry.getDate() + 10);
+  expiry.setDate(expiry.getDate() + 1);
 
   // Insert with a unique-violation guard.
   //
@@ -181,11 +180,11 @@ export async function createMembershipOrder(req: Request, res: Response, next: N
 
     // No per-plan eligibility gate here.
     //
-    // TRIAL_1D (₹99, 1 Day Access) is a PAID, REPEATABLE plan. It is never
-    // blocked by prior free access or by a previous ₹99 purchase. Payment is
+    // TRIAL_1D (₹49, 1 Day Access) is a PAID, REPEATABLE plan. It is never
+    // blocked by prior free access or by a previous ₹49 purchase. Payment is
     // still required for every purchase — the Razorpay order below is the gate.
     //
-    // WEEK_1 (₹499) and MONTH_1 (₹1,999) are likewise always purchasable.
+    // WEEK_1 (₹299) and MONTH_1 (₹499) are likewise always purchasable.
     //
     // FREE_ACCESS_10D is the only one-time-per-user grant, and it is not
     // purchasable at all (it is excluded from createOrderSchema and is
