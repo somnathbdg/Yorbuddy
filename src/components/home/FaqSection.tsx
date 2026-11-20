@@ -18,15 +18,15 @@ const faqItems: FaqItem[] = [
   },
   {
     question: 'Do I need a membership?',
-    answer: 'Yes, a YorBuddy membership is required to view buddy profiles, send booking requests, and access full platform features. We offer a ₹99 1-Day Access to get started.',
+    answer: 'Yes, a YorBuddy membership is required to view buddy profiles, send booking requests, and access full platform features. We offer a ₹49 1-Day Access to get started.',
   },
   {
     question: 'What are the membership plans?',
-    answer: 'We offer three plans: ₹99 for 1 Day (limited access), ₹499 for 1 Week (full access), and ₹1,999 for 1 Month (full access). All plans are one-time payments with no recurring charges.',
+    answer: 'We offer three plans: ₹49 for 1 Day (paid access), ₹299 for 1 Week (full access), and ₹499 for 1 Month (full access). All plans are one-time payments with no recurring charges.',
   },
   {
     question: 'Is the Free Access really free?',
-    answer: 'Yes. The Free Access plan is completely free for 10 days with no payment required. It provides limited access to browse verified companions, filter by activity and city, view buddy profiles, and explore the platform.',
+    answer: 'Yes. The Free Access plan is completely free for 1 day with no payment required. It provides limited access to browse verified companions, filter by activity and city, view buddy profiles, and explore the platform.',
   },
   {
     question: 'Can I become a Buddy?',
