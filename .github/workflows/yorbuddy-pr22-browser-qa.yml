@@ -22,6 +22,8 @@ jobs:
         run: |
           npm install --no-audit --no-fund
           npm run build
+      - name: Membership pricing regression tests
+        run: node server/test-membership-free-access.mjs
       - name: Install browser QA tools
         run: |
           npm install --no-save --no-audit --no-fund playwright @axe-core/playwright lighthouse serve
