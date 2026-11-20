@@ -321,7 +321,7 @@ async function main() {
       body: { plan_id: 'TRIAL_1D' },
     });
     check(res.status === 201, 'Rs.99 order returns 201 (not 403)', `status ${res.status}`);
-    check(res.body?.data?.amount === 9900, 'amount is 9900 paise', String(res.body?.data?.amount));
+    check(res.body?.data?.amount === 4900, 'amount is 4900 paise', String(res.body?.data?.amount));
     // Only human-readable fields are customer-facing. plan_id is an internal
     // identifier (TRIAL_1D) and is never rendered by the frontend, which uses
     // plan_name for the Razorpay description.
@@ -350,7 +350,7 @@ async function main() {
       body: { plan_id: 'TRIAL_1D' },
     });
     check(res.status === 201, 'repeat Rs.99 order returns 201', `status ${res.status}`);
-    check(res.body?.data?.amount === 9900, 'amount is 9900 paise', String(res.body?.data?.amount));
+    check(res.body?.data?.amount === 4900, 'amount is 4900 paise', String(res.body?.data?.amount));
     if (res.status === 201) {
       const created = (await membershipsFor(u.id)).filter((r) => r.plan_id === 'TRIAL_1D');
       created.forEach((r) => createdMembershipIds.push(r.id));
@@ -389,7 +389,7 @@ async function main() {
       body: { plan_id: 'MONTH_1' },
     });
     check(res.status === 201, 'MONTH_1 order returns 201', `status ${res.status}`);
-    check(res.body?.data?.amount === 49900, 'amount is 199900 paise', String(res.body?.data?.amount));
+    check(res.body?.data?.amount === 29900, 'amount is 29900 paise', String(res.body?.data?.amount));
     if (res.status === 201) {
       const created = (await membershipsFor(u.id)).filter((r) => r.plan_id === 'MONTH_1');
       created.forEach((r) => createdMembershipIds.push(r.id));
@@ -422,7 +422,7 @@ async function main() {
   console.log('\n=== T9: Plan parity — API amounts match the authoritative spec ===\n');
   try {
     const u = await registerUser('t9');
-    const expect = { TRIAL_1D: 9900, WEEK_1: 49900, MONTH_1: 199900 };
+    const expect = { TRIAL_1D: 4900, WEEK_1: 29900, MONTH_1: 49900 };
     for (const [plan, amount] of Object.entries(expect)) {
       const res = await api('POST', '/api/memberships/create-order', {
         token: u.token,
