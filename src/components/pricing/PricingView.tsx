@@ -263,7 +263,7 @@ export const PricingView: React.FC = () => {
                 <span className="text-2xl font-black text-slate-900">
                   {activePlanId === 'FREE_ACCESS_10D' ? 'Free Access' : activePlanId === 'TRIAL_1D' ? '1 Day Access' : activePlanId === 'WEEK_1' ? '1 Week' : activePlanId === 'MONTH_1' ? '1 Month' : activePlanId}
                 </span>
-                <span className="text-sm text-slate-500 mt-1">₹{apiMembership?.amount} Paid</span>
+                <span className="text-sm text-slate-500 mt-1">{apiMembership?.amount === 0 ? 'Free Access' : `₹${apiMembership?.amount} Paid`}</span>
                 <span className={`text-xs font-bold mt-2 px-3 py-1 rounded-full ${
                   apiMembership?.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
                 }`}>
