@@ -9,6 +9,14 @@ export const AI_FRIEND_PLANS = {
 
 export type AiFriendPlanId = keyof typeof AI_FRIEND_PLANS;
 
+export function isAiFriendUserFullyVerified(
+  email: string,
+  phone: string,
+  kyc: string
+): boolean {
+  return email === 'verified' && phone === 'verified' && kyc === 'approved';
+}
+
 export function getAiFriendPlan(planId: string) {
   return Object.prototype.hasOwnProperty.call(AI_FRIEND_PLANS, planId)
     ? AI_FRIEND_PLANS[planId as AiFriendPlanId]
