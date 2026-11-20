@@ -45,7 +45,8 @@ jobs:
           let failures = 0;
           for (const route of routes) {
             for (const viewport of viewports) {
-              const context = await browser.newContext({viewport:{width:viewport.width,height:viewport.height}});\n              const page = await context.newPage();
+              const context = await browser.newContext({viewport:{width:viewport.width,height:viewport.height}});
+              const page = await context.newPage();
               const response = await page.goto('http://127.0.0.1:4173'+route,{waitUntil:'networkidle'});
               const title = await page.title();
               const h1 = await page.locator('h1').count();
