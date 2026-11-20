@@ -191,6 +191,21 @@ export const Footer: React.FC = () => {
           </div>
         </div>
 
+        {/* Crawlable public policy and city links */}
+        <nav aria-label="Legal, support and city pages" className="py-6 border-b border-slate-800 flex flex-wrap gap-x-5 gap-y-3 text-sm text-slate-400">
+          <a className={linkClass} href="/privacy">Privacy Policy</a>
+          <a className={linkClass} href="/terms">Terms of Use</a>
+          <a className={linkClass} href="/refund">Refund &amp; Cancellation</a>
+          <a className={linkClass} href="/safety">Safety Guidelines</a>
+          <a className={linkClass} href="/about">About YorBuddy</a>
+          <a className={linkClass} href="/faq">FAQ</a>
+          <a className={linkClass} href="/contact">Contact</a>
+          <a className={linkClass} href="/pune">Pune</a>
+          <a className={linkClass} href="/bengaluru">Bengaluru</a>
+          <a className={linkClass} href="/mumbai">Mumbai</a>
+          <a className={linkClass} href="/delhi-ncr">Delhi NCR</a>
+        </nav>
+
         {/* Bottom copyright and legal disclaimer */}
         <div className="pt-8 flex flex-col md:flex-row items-center justify-between text-sm text-slate-500 gap-4">
           <p>© {new Date().getFullYear()} YorBuddy Technologies India Pvt. Ltd. All rights reserved.</p>
