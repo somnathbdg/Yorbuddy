@@ -91,7 +91,7 @@ try {
   const { error } = await supabase.from('memberships').insert({
     user_id: testUserId,
     plan_id: 'TRIAL_1D',
-    amount: 99,
+    amount: 49,
     currency: 'INR',
     razorpay_order_id: `order_paye2e_${Date.now()}`,
     status: 'success',
