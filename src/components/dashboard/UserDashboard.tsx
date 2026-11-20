@@ -233,7 +233,8 @@ export const UserDashboard: React.FC = () => {
               </div>
               <p className="text-[11px] text-slate-600">
                 {apiMembership
-                  ? (apiMembership.plan_id === 'TRIAL_1D' ? '1 Day Access Plan'\n                    : apiMembership.plan_id === 'MONTH_1' ? '1 Month Plan'
+                  ? (apiMembership.plan_id === 'TRIAL_1D' ? '1 Day Access Plan'
+                    : apiMembership.plan_id === 'MONTH_1' ? '1 Month Plan'
                     : apiMembership.plan_id === 'WEEK_1' ? '1 Week Plan'
                     : apiMembership.plan_id === 'FREE_TRIAL' ? 'Free Access'
                     : apiMembership.plan_id === 'FREE_ACCESS_10D' ? 'Free Access'
