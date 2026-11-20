@@ -17,7 +17,7 @@ function getRazorpay(): any {
 }
 
 function assertVerified(status: Awaited<ReturnType<typeof getAiFriendVerification>>) {
-  if (!status.is_fully_verified) throw Forbidden('Verify either your email address or mobile number before starting an AI Friend plan.');
+  if (!status.is_fully_verified) throw Forbidden('Verify your email, mobile number, and complete KYC approval before starting an AI Friend plan.');
   if (!status.adult_confirmed) throw Forbidden('Please confirm that you are 18 or older before starting an AI Friend plan.');
 }
 
