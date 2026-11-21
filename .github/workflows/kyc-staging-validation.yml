@@ -48,4 +48,5 @@ jobs:
       - run: npm run typecheck
       - run: npm run test:ai-friend-registration
       - run: npm run test:membership-pricing
+      - run: npm run test:ai-friend
       - run: npm run build
