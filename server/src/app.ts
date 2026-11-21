@@ -19,6 +19,7 @@ import { registerCleanupJob } from './jobs/cleanupPendingBookings.js';
 import { registerFacebookCronJob } from './jobs/facebookAutomationJob.js';
 import facebookRoutes from './routes/facebook.js';
 import { telegramWebhookRouter, telegramAdminRouter } from './routes/telegram.js';
+import aiFriendRoutes from './routes/aiFriend.js';
 
 /**
  * Create and configure the Express application.
@@ -109,6 +110,9 @@ export function createApp(): Express {
   //   - /api/telegram/* (management)-> ADMIN ONLY, via authenticate + requireRole.
   app.use('/api/telegram', telegramWebhookRouter);
   app.use('/api/telegram', telegramAdminRouter);
+
+  // AI Friend: authenticated chat, verification and subscription endpoints.
+  app.use('/api/ai-friend', aiFriendRoutes);
 
   // API routes will be added here in subsequent steps
   // app.use('/api/payments', paymentRoutes);
