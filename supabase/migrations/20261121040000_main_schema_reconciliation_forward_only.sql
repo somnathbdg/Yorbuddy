@@ -173,7 +173,7 @@ END;
 $function$;
 
 REVOKE ALL ON FUNCTION public.create_booking_atomic(
-  text, uuid, uuid, date, time, integer, integer, integer, integer,
+  text, uuid, uuid, uuid, date, time, integer, integer, integer, integer,
   integer, timestamptz, text, text, text
 ) FROM PUBLIC, anon, authenticated;
 
@@ -195,7 +195,7 @@ CREATE TABLE IF NOT EXISTS public.admin_buddy_account_actions (
 DO $table_shape$
 BEGIN
   IF NOT (
-    SELECT count(*) = 5
+    SELECT count(*) = 6
     FROM information_schema.columns
     WHERE table_schema='public'
       AND table_name='admin_buddy_account_actions'
