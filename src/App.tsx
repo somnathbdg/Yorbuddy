@@ -106,6 +106,8 @@ const AppContent: React.FC = () => {
               </>
             )}
 
+            {activeTab === 'ai-friend' && <AiFriendSection />}
+
             {activeTab === 'find-buddy' && <BuddySearch />}
 
             {activeTab === 'how-it-works' && (
