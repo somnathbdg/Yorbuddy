@@ -20,7 +20,7 @@ export async function getAiFriendVerification(userId: string) {
   if (error || !user) throw new AppError('Unable to verify account status.', 503, 'VERIFICATION_UNAVAILABLE');
   if (!user.is_active) throw Forbidden('Your account is inactive.');
 
-  // AI Friend follows the account's full YorBuddy verification gate:
+  // AI Friend follows the account's full YorBuddy verification gate (Email + Mobile OTP + approved KYC):
   // verified email + verified mobile OTP + approved KYC.
   const verification = await getUserVerificationStatus(supabase, userId);
   const fullyVerified = isAiFriendUserFullyVerified(verification.email, verification.phone, verification.kyc);
