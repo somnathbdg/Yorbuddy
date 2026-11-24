@@ -24,6 +24,10 @@ interface EnvConfig {
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
   GOOGLE_REDIRECT_URI: string;
+  PAYMENT_ENVIRONMENT: string;
+  WHITESTARPAY_SANDBOX_ENABLED: boolean;
+  WHITESTARPAY_API_URL: string;
+  WHITESTARPAY_PROJECT_API_KEY: string;
 }
 
 const requiredEnvVars: (keyof EnvConfig)[] = [
@@ -74,6 +78,10 @@ function loadEnv(): EnvConfig {
     GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || '',
     GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || '',
     GOOGLE_REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3001/api/auth/google/callback',
+    PAYMENT_ENVIRONMENT: process.env.PAYMENT_ENVIRONMENT || 'production',
+    WHITESTARPAY_SANDBOX_ENABLED: process.env.WHITESTARPAY_SANDBOX_ENABLED === 'true',
+    WHITESTARPAY_API_URL: process.env.WHITESTARPAY_API_URL || '',
+    WHITESTARPAY_PROJECT_API_KEY: process.env.WHITESTARPAY_PROJECT_API_KEY || '',
   };
 }
 

@@ -5,6 +5,8 @@ import { z } from 'zod';
 import { BadRequest, NotFound, Forbidden } from '../middleware/errorHandler.js';
 import { verifyHmacSha256 } from './paymentConfirmation.js';
 import Razorpay from 'razorpay';
+import { randomUUID } from 'node:crypto';
+import { completeWhitestarSandboxOrder, createWhitestarSandboxOrder, isWhitestarSandboxEnabled } from './whitestarPaySandbox.js';
 
 let razorpayInstance: any = null;
 
@@ -190,8 +192,39 @@ export async function createMembershipOrder(req: Request, res: Response, next: N
     // purchasable at all (it is excluded from createOrderSchema and is
     // assigned server-side by assignFreeAccess on registration).
 
-    // Server calculates amount from plan; client amount ignored
+    // Server calculates amount from plan; client amount is never trusted.
     const plan = PLANS[input.plan_id];
+    if (isWhitestarSandboxEnabled()) {
+      const nonce = randomUUID();
+      const order = await createWhitestarSandboxOrder({
+        projectOrderRef: `membership:${userId}:${plan.id}:${nonce}`,
+        amountMinor: plan.amount,
+        description: `YorBuddy membership ${plan.name}`,
+        idempotencyKey: `yorbuddy-membership-${userId}-${nonce}`,
+      });
+      const { error } = await supabase.from('memberships').insert({
+        user_id: userId,
+        plan_id: plan.id,
+        amount: plan.amount / 100,
+        currency: 'INR',
+        razorpay_order_id: order.orderRef,
+        status: 'created',
+      });
+      if (error) throw error;
+      res.status(201).json({
+        data: {
+          order_id: order.orderRef,
+          amount: order.amountMinor,
+          currency: order.currency,
+          key_id: 'wsp_sandbox',
+          plan_id: plan.id,
+          plan_name: plan.name,
+          sandbox: true,
+        },
+      });
+      return;
+    }
+
     const razorpay = getRazorpay();
     const order = await razorpay.orders.create({
       amount: plan.amount,
@@ -199,7 +232,6 @@ export async function createMembershipOrder(req: Request, res: Response, next: N
       receipt: `membership_${Date.now()}`,
       notes: { user_id: userId, plan_id: plan.id },
     });
-
     const { error } = await supabase.from('memberships').insert({
       user_id: userId,
       plan_id: plan.id,
@@ -209,16 +241,8 @@ export async function createMembershipOrder(req: Request, res: Response, next: N
       status: 'created',
     });
     if (error) throw error;
-
     res.status(201).json({
-      data: {
-        order_id: order.id,
-        amount: order.amount,
-        currency: order.currency,
-        key_id: env.RAZORPAY_KEY_ID,
-        plan_id: plan.id,
-        plan_name: plan.name,
-      },
+      data: { order_id: order.id, amount: order.amount, currency: order.currency, key_id: env.RAZORPAY_KEY_ID, plan_id: plan.id, plan_name: plan.name },
     });
   } catch (err: any) { next(err); }
 }
@@ -237,7 +261,35 @@ export async function verifyMembershipPayment(req: Request, res: Response, next:
 
     if (mErr || !m) throw NotFound('Membership record not found.');
     if (m.user_id !== userId) throw Forbidden('Access denied.');
-    // Verify the signature before handling any state, including idempotent replays.
+    if (input.razorpay_order_id.startsWith('wsp_sbx_')) {
+      if (!isWhitestarSandboxEnabled()) throw BadRequest('WhitestarPay sandbox verification is disabled.');
+      const completed = await completeWhitestarSandboxOrder(input.razorpay_order_id);
+      if (!completed.simulated || completed.status !== 'succeeded' || completed.currency !== 'INR' ||
+          completed.amountMinor !== Math.round(Number(m.amount) * 100) ||
+          !/^sim_pay_[a-f0-9]{32}$/.test(completed.paymentRef)) {
+        throw BadRequest('WhitestarPay sandbox payment reconciliation failed.');
+      }
+      if (m.status === 'success' && m.razorpay_payment_id !== completed.paymentRef) {
+        throw BadRequest('This membership order is already paid with a different payment ID.');
+      }
+      const start = new Date();
+      const expiry = calculateExpiry(m.plan_id as PlanId, start);
+      const { error: sandboxUpdateError } = await supabase.from('memberships').update({
+        razorpay_payment_id: completed.paymentRef,
+        razorpay_signature: null,
+        status: 'success',
+        membership_start_date: start.toISOString(),
+        membership_expiry_date: expiry ? expiry.toISOString() : null,
+        updated_at: new Date().toISOString(),
+      }).eq('id', m.id);
+      if (sandboxUpdateError) throw sandboxUpdateError;
+      res.status(200).json({
+        data: { membership_id: m.id, status: 'success', plan_id: m.plan_id, start_date: start.toISOString(), expiry_date: expiry ? expiry.toISOString() : null, sandbox: true },
+      });
+      return;
+    }
+
+    // Verify the Razorpay signature before handling any state, including replays.
     const valid = verifyRazorpaySignature(input.razorpay_order_id, input.razorpay_payment_id, input.razorpay_signature);
     if (!valid) throw BadRequest('Invalid signature.');
 

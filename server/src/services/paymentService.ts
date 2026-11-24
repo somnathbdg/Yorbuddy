@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { BadRequest, NotFound, Forbidden, Conflict } from '../middleware/errorHandler.js';
 import { verifyHmacSha256, getRawWebhookBody } from './paymentConfirmation.js';
 import Razorpay from 'razorpay';
+import { completeWhitestarSandboxOrder, createWhitestarSandboxOrder, isWhitestarSandboxEnabled } from './whitestarPaySandbox.js';
 
 // ========== Razorpay Client ==========
 let razorpayInstance: any = null;
@@ -139,16 +140,46 @@ export async function createOrder(req: Request, res: Response, next: NextFunctio
     // Amount is in paise (Razorpay uses smallest currency unit)
     const amountInPaise = booking.total_amount * 100;
 
-    // Create Razorpay order
+    // Sandbox-only first-party orchestration. The backend holds the project key;
+    // the browser receives only a non-secret UI marker and local order reference.
+    if (isWhitestarSandboxEnabled()) {
+      const order = await createWhitestarSandboxOrder({
+        projectOrderRef: `booking:${booking.id}`,
+        amountMinor: amountInPaise,
+        description: `YorBuddy booking ${booking.booking_code}`,
+        idempotencyKey: `yorbuddy-booking-${booking.id}`,
+      });
+      const { error: sandboxPaymentError } = await supabase.from('payments').insert({
+        user_id: userId,
+        booking_id: booking.id,
+        payment_type: 'booking',
+        amount: booking.total_amount,
+        currency: 'INR',
+        razorpay_order_id: order.orderRef,
+        status: 'created',
+      });
+      if (sandboxPaymentError) throw sandboxPaymentError;
+      res.status(201).json({
+        data: {
+          order_id: order.orderRef,
+          amount: order.amountMinor,
+          currency: order.currency,
+          key_id: 'wsp_sandbox',
+          booking_code: booking.booking_code,
+          sandbox: true,
+        },
+        message: 'WhitestarPay sandbox order created.',
+      });
+      return;
+    }
+
+    // Production and legacy staging path remains Razorpay-backed.
     const razorpay = getRazorpay();
     const order = await razorpay.orders.create({
       amount: amountInPaise,
       currency: 'INR',
       receipt: booking.booking_code,
-      notes: {
-        booking_id: booking.id,
-        user_id: userId,
-      },
+      notes: { booking_id: booking.id, user_id: userId },
     });
 
     // Store payment record
@@ -203,7 +234,38 @@ export async function verifyPayment(req: Request, res: Response, next: NextFunct
       throw Forbidden('You do not have permission to verify this payment.');
     }
 
-    // Verify the signed callback before any state transition, including replays.
+    if (input.razorpay_order_id.startsWith('wsp_sbx_')) {
+      if (!isWhitestarSandboxEnabled()) throw BadRequest('WhitestarPay sandbox verification is disabled.');
+      const completed = await completeWhitestarSandboxOrder(input.razorpay_order_id);
+      if (!completed.simulated || completed.status !== 'succeeded' || completed.currency !== 'INR' ||
+          completed.amountMinor !== Math.round(Number(payment.amount) * 100) ||
+          !/^sim_pay_[a-f0-9]{32}$/.test(completed.paymentRef)) {
+        throw BadRequest('WhitestarPay sandbox payment reconciliation failed.');
+      }
+      const { data: booking, error: bookingFetchError } = await supabase
+        .from('bookings').select('id, status').eq('id', payment.booking_id).single();
+      if (bookingFetchError || !booking) throw NotFound('Associated booking not found.');
+      if (['expired', 'cancelled', 'rejected'].includes(booking.status)) {
+        throw BadRequest('Cannot confirm payment for an expired or cancelled booking.');
+      }
+      const { error: confirmationError } = await supabase.rpc('confirm_booking_payment', {
+        p_payment_record_id: payment.id,
+        p_razorpay_payment_id: completed.paymentRef,
+        p_razorpay_signature: null,
+      });
+      if (confirmationError) {
+        console.error('[PAYMENT] WhitestarPay sandbox confirmation failed:', confirmationError.message);
+        throw Conflict('Sandbox payment could not be reconciled safely.');
+      }
+      await supabase.from('payments').update({ payment_method: 'whitestarpay_sandbox' }).eq('id', payment.id);
+      res.status(200).json({
+        data: { payment_id: completed.paymentRef, order_id: input.razorpay_order_id, status: 'success', sandbox: true },
+        message: 'WhitestarPay sandbox payment verified.',
+      });
+      return;
+    }
+
+    // Verify Razorpay signature before any state transition, including replays.
     const isValid = verifyRazorpaySignature(
       input.razorpay_order_id,
       input.razorpay_payment_id,
