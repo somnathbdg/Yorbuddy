@@ -1,0 +1,43 @@
+name: SEO pull request validation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "index.html"
+      - "src/**"
+      - "public/**"
+      - "package.json"
+      - "bun.lock"
+      - "vite.config.ts"
+      - ".github/workflows/seo-pr-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: seo-pr-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend typecheck and production build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: TypeScript check
+        run: bun run lint
+
+      - name: Production build
+        run: bun run build
