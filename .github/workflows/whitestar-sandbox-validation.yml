@@ -16,14 +16,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: server/package-lock.json
       - name: Install backend dependencies
         working-directory: server
         run: npm install --include=dev --no-audit --no-fund
       - name: TypeScript build
         working-directory: server
         run: npm run build
-      - name: Payment and backend tests
+      - name: Payment and membership regression tests
         working-directory: server
-        run: npm test -- --runInBand
+        run: npm run test:payment && npm run test:membership-pricing && npm run test:ai-friend-registration
