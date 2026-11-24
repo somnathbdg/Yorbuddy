@@ -1,0 +1,21 @@
+name: YorBuddy WhitestarPay sandbox frontend validation
+on:
+  pull_request:
+    branches: [feature/simple-login-registration]
+    paths:
+      - 'src/services/payment.ts'
+      - 'src/services/membership.ts'
+      - '.github/workflows/whitestar-sandbox-frontend.yml'
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm install --include=dev --no-audit --no-fund
+      - name: Build frontend
+        run: npm run build

@@ -58,6 +58,21 @@ class MembershipService {
     onDismiss?: () => void;
     onError?: (error: any) => void;
   }): void {
+    // WhitestarPay simulator is explicitly a no-money staging flow.
+    if (options.key === 'wsp_sandbox') {
+      const accepted = window.confirm('WHITESTARPAY SANDBOX\\n\\nThis is a simulated payment. No real money will be charged.\\n\\nComplete the test membership payment?');
+      if (accepted) {
+        options.handler({
+          razorpay_order_id: options.order_id,
+          razorpay_payment_id: 'sandbox_pending',
+          razorpay_signature: 'sandbox-simulator',
+        });
+      } else if (options.onDismiss) {
+        options.onDismiss();
+      }
+      return;
+    }
+
     if (!(window as any).Razorpay) {
       const script = document.createElement('script');
       script.src = 'https://checkout.razorpay.com/v1/checkout.js';
