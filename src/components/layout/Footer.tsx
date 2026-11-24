@@ -192,7 +192,7 @@ export const Footer: React.FC = () => {
         </div>
 
         {/* Crawlable public policy and city links */}
-        <nav aria-label="Legal, support and city pages" className="py-6 border-b border-slate-800 flex flex-wrap gap-x-5 gap-y-3 text-sm text-slate-400">
+        <nav aria-label="Explore, legal, support and city pages" className="py-6 border-b border-slate-800 flex flex-wrap gap-x-5 gap-y-3 text-sm text-slate-400">
           <a className={linkClass} href="/privacy">Privacy Policy</a>
           <a className={linkClass} href="/terms">Terms of Use</a>
           <a className={linkClass} href="/refund">Refund &amp; Cancellation</a>
@@ -200,6 +200,8 @@ export const Footer: React.FC = () => {
           <a className={linkClass} href="/about">About YorBuddy</a>
           <a className={linkClass} href="/faq">FAQ</a>
           <a className={linkClass} href="/contact">Contact</a>
+          <a className={linkClass} href="/make-friends-in-india">Make Friends in India</a>
+          <a className={linkClass} href="/activity-buddy">Activity Buddies</a>
           <a className={linkClass} href="/pune">Pune</a>
           <a className={linkClass} href="/bengaluru">Bengaluru</a>
           <a className={linkClass} href="/mumbai">Mumbai</a>

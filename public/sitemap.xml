@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
  <url><loc>https://yorbuddy.com/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>
+ <url><loc>https://yorbuddy.com/make-friends-in-india</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+ <url><loc>https://yorbuddy.com/activity-buddy</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
  <url><loc>https://yorbuddy.com/privacy</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
  <url><loc>https://yorbuddy.com/terms</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
  <url><loc>https://yorbuddy.com/refund</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
