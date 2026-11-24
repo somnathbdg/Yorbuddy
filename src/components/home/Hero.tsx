@@ -48,15 +48,15 @@ export const Hero: React.FC = () => {
 
             {/* Headline */}
             <h1 className="text-[2.75rem] leading-[1.08] sm:text-6xl lg:text-[4.5rem] font-black text-slate-900 tracking-tight">
-              Need Company? <br />
+              Find Your Buddy for <br />
               <span className="text-gradient-vivid animate-gradient inline-block">
-                Find Your Buddy.
+                Activities &amp; Friendship.
               </span>
             </h1>
 
             {/* Description */}
             <p className="text-lg sm:text-xl text-slate-600 max-w-2xl mx-auto lg:mx-0 font-normal leading-relaxed">
-              &ldquo;Meet verified people for coffee, movies, shopping, events, conversations, city exploration and more.&rdquo;
+              Meet people for coffee, movies, shopping, events, conversations and city exploration. Discover platonic activity companionship across India.
             </p>
 
             {/* Platform clarity note */}
