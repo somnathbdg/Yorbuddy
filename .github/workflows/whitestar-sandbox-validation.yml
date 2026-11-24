@@ -1,5 +1,10 @@
 name: WhitestarPay sandbox integration validation
 on:
+  push:
+    branches: [fix/booking-slot-concurrency-staging]
+    paths:
+      - 'server/src/services/membershipService.ts'
+      - '.github/workflows/whitestar-sandbox-validation.yml'
   pull_request:
     branches: [fix/booking-slot-concurrency-staging]
     paths:
