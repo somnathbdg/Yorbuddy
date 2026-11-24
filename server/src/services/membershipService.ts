@@ -269,8 +269,26 @@ export async function verifyMembershipPayment(req: Request, res: Response, next:
           !/^sim_pay_[a-f0-9]{32}$/.test(completed.paymentRef)) {
         throw BadRequest('WhitestarPay sandbox payment reconciliation failed.');
       }
-      if (m.status === 'success' && m.razorpay_payment_id !== completed.paymentRef) {
-        throw BadRequest('This membership order is already paid with a different payment ID.');
+      if (m.status === 'success') {
+        if (m.razorpay_payment_id !== completed.paymentRef) {
+          throw BadRequest('This membership order is already paid with a different payment ID.');
+        }
+        // Idempotent replay: never restart or extend an already activated plan.
+        res.status(200).json({
+          data: {
+            membership_id: m.id,
+            status: 'success',
+            plan_id: m.plan_id,
+            start_date: m.membership_start_date,
+            expiry_date: m.membership_expiry_date,
+            sandbox: true,
+            replay: true,
+          },
+        });
+        return;
+      }
+      if (!['created', 'pending'].includes(m.status)) {
+        throw BadRequest(`Membership cannot be activated from status ${m.status}.`);
       }
       const start = new Date();
       const expiry = calculateExpiry(m.plan_id as PlanId, start);
