@@ -50,5 +50,11 @@ jobs:
       - run: npm run test:membership-pricing
       - run: npm run test:ai-friend
       - run: npm run test:suspension
+        env:
+          NODE_ENV: test
+          SUPABASE_URL: https://example.supabase.co
+          SUPABASE_SERVICE_KEY: test-service-key
+          JWT_ACCESS_SECRET: test-access-secret
+          JWT_REFRESH_SECRET: test-refresh-secret
       - run: npm run test:payment
       - run: npm run build
