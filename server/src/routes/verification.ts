@@ -8,7 +8,7 @@ import {
   submitKyc,
   getMyKycStatus,
 } from '../services/verificationService.js';
-import { authenticate } from '../middleware/auth.js';
+import { authenticate, requireActiveUser } from '../middleware/auth.js';
 import { verificationLimiter } from '../middleware/security.js';
 import { uploadKycObject } from '../services/kycStorageService.js';
 
@@ -32,27 +32,27 @@ const router = Router();
 
 // GET /api/verification/me
 // Returns the current user's verification status (email, phone, KYC)
-router.get('/me', authenticate, getMyVerificationStatus);
+router.get('/me', authenticate, requireActiveUser, getMyVerificationStatus);
 
 // ========== Email Verification ==========
 
 // POST /api/verification/email/request
 // Request a verification code to be sent to user's email
-router.post('/email/request', authenticate, verificationLimiter, requestEmailCode);
+router.post('/email/request', authenticate, requireActiveUser, verificationLimiter, requestEmailCode);
 
 // POST /api/verification/email/verify
 // Verify email with the 6-digit code
-router.post('/email/verify', authenticate, verificationLimiter, verifyEmail);
+router.post('/email/verify', authenticate, requireActiveUser, verificationLimiter, verifyEmail);
 
 // ========== Phone Verification ==========
 
 // POST /api/verification/phone/request
 // Request a verification code to be sent to user's phone
-router.post('/phone/request', authenticate, verificationLimiter, requestPhoneCode);
+router.post('/phone/request', authenticate, requireActiveUser, verificationLimiter, requestPhoneCode);
 
 // POST /api/verification/phone/verify
 // Verify phone with the 6-digit code
-router.post('/phone/verify', authenticate, verificationLimiter, verifyPhone);
+router.post('/phone/verify', authenticate, requireActiveUser, verificationLimiter, verifyPhone);
 
 // ========== KYC (Know Your Customer) ==========
 
@@ -61,6 +61,7 @@ router.post('/phone/verify', authenticate, verificationLimiter, verifyPhone);
 router.post(
   '/upload/:kind',
   authenticate,
+  requireActiveUser,
   verificationLimiter,
   express.raw({ type: ['image/jpeg', 'image/png', 'application/pdf'], limit: '5mb' }),
   uploadKycObject,
@@ -68,12 +69,12 @@ router.post(
 
 // POST /api/kyc/submit
 // Submit private object paths for admin review
-router.post('/submit', authenticate, verificationLimiter, submitKyc);
+router.post('/submit', authenticate, requireActiveUser, verificationLimiter, submitKyc);
 
 // GET /api/kyc/status
 // Get current user's KYC submission status
 // (was /me but that collides with GET /verification/me)
-router.get('/status', authenticate, getMyKycStatus);
+router.get('/status', authenticate, requireActiveUser, getMyKycStatus);
 
 export default router;
 
